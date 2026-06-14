@@ -4,15 +4,16 @@ import { DIRECTORS, selectDirectorsForMeeting } from '../lib/directors.js'
 // Llama a Anthropic para un director específico con streaming
 import { MEETING_TYPES } from '../lib/directors.js'
 
-async function callDirector({ director, situation, meetingType, apiKey, onChunk }) {
+async function callDirector({ director, situation, meetingType, contextBlock, apiKey, onChunk }) {
   const meetingLabel = MEETING_TYPES.find(m => m.id === meetingType)?.label || 'Reunión'
 
+  const contextSection = contextBlock ? ("\n\nCONTEXTO ADICIONAL:\n" + contextBlock) : ""
   const userMsg = `REUNIÓN DE JUNTA — ${meetingLabel}
 
 SITUACIÓN:
-${situation}
+${situation}${contextSection}
 
-Como ${director.name} (${director.title}), da tu análisis experto y posición.`
+Como ${director.name} (${director.title}), da tu análisis experto y posición. Si el contexto adicional es relevante para tu especialidad, incorpóralo en tu análisis.`
 
   const endpoint = apiKey
     ? 'https://api.anthropic.com/v1/messages'
@@ -142,7 +143,7 @@ export function useBoard() {
   const [rateLimitInfo, setRateLimitInfo] = useState(null)
   const [globalError, setGlobalError] = useState(null)
 
-  const conveneBoard = useCallback(async ({ situation, meetingType, apiKey }) => {
+  const conveneBoard = useCallback(async ({ situation, meetingType, contextBlock, apiKey }) => {
     const selected = selectDirectorsForMeeting(meetingType, DIRECTORS)
     setActiveDirectors(selected)
     setDirectorStates({})
@@ -167,6 +168,7 @@ export function useBoard() {
           director,
           situation,
           meetingType,
+          contextBlock: contextBlock || '',
           apiKey: apiKey || null,
           onChunk: (partial) => {
             setDirectorStates(prev => ({
