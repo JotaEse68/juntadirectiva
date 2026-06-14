@@ -5,6 +5,8 @@ import VerdictPanel from './components/VerdictPanel.jsx'
 import DownloadBanner from './components/DownloadBanner.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import { useBoard } from './hooks/useBoard.js'
+import { useContextBuilder } from './hooks/useContext.js'
+import ContextPanel from './components/ContextPanel.jsx'
 import { DIRECTORS, MEETING_TYPES } from './lib/directors.js'
 
 const STORAGE_KEY = 'junta_api_key'
@@ -18,6 +20,8 @@ export default function App() {
   const [selectedDirector, setSelectedDirector] = useState(null)
 
   const { conveneBoard, reset, directorStates, verdict, verdictLoading, phase, activeDirectors, globalError } = useBoard()
+  const { items: ctxItems, addNote, processFile, processURL, removeItem: removeCtxItem,
+          buildContextBlock, hasContext, isProcessing: ctxProcessing } = useContextBuilder()
 
   const isIdle     = phase === 'idle'
   const isRunning  = !isIdle && phase !== 'done'
@@ -28,7 +32,7 @@ export default function App() {
 
   const handleConvene = useCallback(async () => {
     if (!situation.trim() || !isIdle) return
-    await conveneBoard({ situation: situation.trim(), meetingType, apiKey: apiKey || null })
+    await conveneBoard({ situation: situation.trim(), meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null })
   }, [situation, meetingType, apiKey, isIdle, conveneBoard])
 
   const handleReset = () => { reset(); setSituation('') }
@@ -165,9 +169,34 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Panel de contexto enriquecido */}
+              <div>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
+                  <p style={{ fontSize:'11px', color:'var(--t3)', letterSpacing:'.08em', textTransform:'uppercase', fontWeight:500 }}>
+                    Contexto adicional
+                    <span style={{ marginLeft:'6px', fontSize:'10px', padding:'2px 7px', borderRadius:'4px', background:'var(--blue-dim)', color:'var(--blue)', border:'1px solid var(--blue-bd)' }}>
+                      Opcional
+                    </span>
+                  </p>
+                  {hasContext && (
+                    <span style={{ fontSize:'11px', color:'var(--blue)' }}>
+                      {ctxItems.filter(i=>i.status==='done').length} fuente{ctxItems.filter(i=>i.status==='done').length!==1?'s':''} lista{ctxItems.filter(i=>i.status==='done').length!==1?'s':''}
+                    </span>
+                  )}
+                </div>
+                <ContextPanel
+                  items={ctxItems}
+                  onProcessFile={(f) => processFile(f, apiKey||null)}
+                  onProcessURL={(url) => processURL(url, apiKey||null)}
+                  onAddNote={(text) => addNote(text, apiKey||null)}
+                  onRemove={removeCtxItem}
+                  isProcessing={ctxProcessing}
+                />
+              </div>
+
               <button
                 onClick={handleConvene}
-                disabled={!situation.trim()}
+                disabled={!situation.trim() || ctxProcessing}
                 style={{ padding: '17px', borderRadius: 'var(--r-md)', border: 'none', background: situation.trim() ? 'var(--blue)' : 'var(--bg3)', color: situation.trim() ? 'var(--bg0)' : 'var(--t3)', fontSize: '15px', fontWeight: 700, cursor: situation.trim() ? 'pointer' : 'not-allowed', transition: 'all .2s', letterSpacing: '.02em' }}
               >
                 🏛️ Convocar la junta
