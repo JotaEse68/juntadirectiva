@@ -1,154 +1,163 @@
 import React, { useState } from 'react'
 
-export default function DirectorCard({ director, state, index }) {
+export default function DirectorCard({ director, state, index, onClickDirector }) {
   const [expanded, setExpanded] = useState(false)
-  const { status = 'pending', text = '', error } = state || {}
+  const { status = 'pending', text = '' } = state || {}
 
-  const delay = `${index * 0.08}s`
+  const isJottarina = director.id === 'jottarina'
+  const accent    = isJottarina ? 'var(--red)'     : 'var(--blue)'
+  const accentDim = isJottarina ? 'var(--red-dim)' : 'var(--blue-dim)'
+  const accentBd  = isJottarina ? 'var(--red-bd)'  : 'var(--blue-bd)'
 
-  const statusIcon = {
-    pending:   '⏳',
-    streaming: '💬',
-    done:      '✓',
-    error:     '✗',
-  }[status] || '⏳'
+  const isActive = status === 'streaming'
+  const isDone   = status === 'done'
 
-  const statusColor = {
-    pending:   'var(--text3)',
-    streaming: director.color,
-    done:      director.color,
-    error:     '#ff6b6b',
-  }[status]
+  const preview = text ? text.replace(/\n/g, ' ').slice(0, 140) + '…' : ''
 
-  // Preview: primera línea del texto
-  const preview = text ? text.split('\n')[0].slice(0, 120) + (text.length > 120 ? '…' : '') : ''
+  // Extrae el voto/posición del texto (última línea relevante)
+  const extractVote = (t) => {
+    if (!t) return null
+    const lines = t.split('\n').filter(l => l.trim())
+    const last3 = lines.slice(-3).join(' ')
+    const keywords = ['voto:', 'posición:', 'evaluación:', 'veredicto:', 'proceder', 'apruebo', 'viable', 'riesgo', 'sí,', 'no,']
+    for (const line of lines.slice(-4)) {
+      const lo = line.toLowerCase()
+      if (keywords.some(k => lo.includes(k))) return line.trim()
+    }
+    return null
+  }
+
+  const vote = isDone ? extractVote(text) : null
 
   return (
     <div
       className="slide-in"
       style={{
-        animationDelay: delay,
-        background: 'var(--bg2)',
-        border: `1px solid ${status === 'done' || status === 'streaming' ? director.colorBorder : 'var(--border)'}`,
+        animationDelay: `${index * 0.06}s`,
+        background: isActive ? accentDim : 'var(--bg2)',
+        border: `1px solid ${isActive ? accentBd : isDone ? 'rgba(255,255,255,0.09)' : 'var(--bd)'}`,
         borderRadius: 'var(--r-lg)',
         overflow: 'hidden',
-        transition: 'border-color 0.3s',
+        transition: 'all 0.3s ease',
       }}
     >
-      {/* Header del director */}
+      {/* Header */}
       <div
         style={{
           padding: '14px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          cursor: status === 'done' ? 'pointer' : 'default',
-          background: status === 'done' || status === 'streaming' ? director.colorDim : 'transparent',
-          transition: 'background 0.3s',
+          display: 'flex', alignItems: 'center', gap: '12px',
+          cursor: 'pointer',
         }}
-        onClick={() => status === 'done' && setExpanded(!expanded)}
+        onClick={() => isDone ? setExpanded(!expanded) : onClickDirector(director)}
       >
         {/* Avatar */}
-        <div style={{
-          width: '40px', height: '40px', borderRadius: '50%',
-          background: director.colorDim,
-          border: `1px solid ${director.colorBorder}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '18px', flexShrink: 0,
-        }}>
+        <div
+          style={{
+            width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
+            background: isActive ? accentDim : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${isActive ? accentBd : 'var(--bd)'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '17px', cursor: 'pointer', transition: 'all 0.3s',
+          }}
+          onClick={e => { e.stopPropagation(); onClickDirector(director) }}
+          title={`Ver perfil de ${director.name}`}
+        >
           {director.emoji}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-            <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text)' }}>{director.name}</span>
-            {director.id === 'jottarina' && (
-              <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: 'rgba(255,107,107,0.15)', color: '#ff6b6b', fontWeight: 600 }}>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--t1)' }}>{director.name}</span>
+            {isJottarina && (
+              <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '3px', background: 'var(--red-dim)', color: 'var(--red)', fontWeight: 700, border: '1px solid var(--red-bd)' }}>
                 CRO
               </span>
             )}
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--text2)' }}>{director.title}</p>
+          <p style={{ fontSize: '11px', color: 'var(--t3)' }}>{director.title}</p>
         </div>
 
-        {/* Status */}
+        {/* Status indicator */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-          {status === 'streaming' && (
+          {isActive && (
             <span style={{ display: 'flex', gap: '3px' }}>
-              <span className="dot" style={{ background: director.color }}></span>
-              <span className="dot" style={{ background: director.color }}></span>
-              <span className="dot" style={{ background: director.color }}></span>
+              <span className="dot" style={{ background: accent }}></span>
+              <span className="dot" style={{ background: accent }}></span>
+              <span className="dot" style={{ background: accent }}></span>
             </span>
           )}
-          <span style={{ fontSize: '13px', color: statusColor, fontWeight: 500 }}>
-            {statusIcon}
-          </span>
-          {status === 'done' && (
-            <span style={{ fontSize: '12px', color: 'var(--text3)' }}>
-              {expanded ? '▲' : '▼'}
-            </span>
+          {isDone && (
+            <span style={{ fontSize: '11px', color: accent, fontWeight: 600 }}>✓</span>
+          )}
+          {status === 'pending' && (
+            <span style={{ fontSize: '11px', color: 'var(--t3)' }}>—</span>
+          )}
+          {isDone && (
+            <span style={{ fontSize: '11px', color: 'var(--t3)' }}>{expanded ? '▲' : '▼'}</span>
           )}
         </div>
       </div>
 
-      {/* Preview cuando está colapsado y hay texto */}
-      {status === 'done' && !expanded && preview && (
+      {/* Preview colapsado */}
+      {isDone && !expanded && (
         <div
           style={{ padding: '0 16px 14px', cursor: 'pointer' }}
           onClick={() => setExpanded(true)}
         >
-          <p style={{ fontSize: '13px', color: 'var(--text2)', lineHeight: 1.5, fontStyle: 'italic' }}>
+          <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.6, fontStyle: 'italic' }}>
             {preview}
           </p>
-          <span style={{ fontSize: '11px', color: director.color, marginTop: '4px', display: 'block' }}>
-            Ver análisis completo →
-          </span>
+          {vote && (
+            <p style={{ fontSize: '11px', color: accent, marginTop: '6px', fontWeight: 500 }}>
+              {vote.slice(0, 80)}
+            </p>
+          )}
+          <p style={{ fontSize: '11px', color: accent, marginTop: '6px', opacity: .7 }}>
+            Ver análisis completo ↓
+          </p>
         </div>
       )}
 
       {/* Streaming en vivo */}
-      {status === 'streaming' && text && (
+      {isActive && text && (
         <div style={{ padding: '0 16px 14px' }}>
-          <p style={{ fontSize: '13px', color: 'var(--text2)', lineHeight: 1.6 }}>
-            {text.slice(0, 300)}{text.length > 300 ? '…' : ''}
+          <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.65 }}>
+            {text.slice(0, 280)}{text.length > 280 ? '…' : ''}
           </p>
         </div>
       )}
 
-      {/* Respuesta completa expandida */}
-      {status === 'done' && expanded && (
-        <div style={{ padding: '0 16px 16px', borderTop: '1px solid var(--border)' }}>
-          <div style={{ paddingTop: '14px' }}>
-            {text.split('\n').filter(l => l.trim()).map((para, i) => (
+      {/* Análisis completo expandido */}
+      {isDone && expanded && (
+        <div style={{ borderTop: '1px solid var(--bd)', padding: '16px' }}>
+          {text.split('\n').filter(l => l.trim()).map((para, i) => {
+            const lo = para.toLowerCase()
+            const isVote = ['voto', 'posición', 'evaluación', 'veredicto', 'apruebo', 'viable', 'riesgo alto', 'riesgo bajo', 'riesgo medio'].some(k => lo.includes(k))
+            return (
               <p key={i} style={{
-                fontSize: '14px',
-                lineHeight: 1.75,
-                color: para.toLowerCase().includes('voto') || para.toLowerCase().includes('veredicto') || para.toLowerCase().includes('posición') || para.toLowerCase().includes('evaluación')
-                  ? director.color : 'var(--text)',
-                marginBottom: '12px',
-                fontWeight: para.toLowerCase().includes('voto') || para.toLowerCase().includes('veredicto') ? 500 : 400,
+                fontSize: '13px', lineHeight: 1.75, marginBottom: '10px',
+                color: isVote ? accent : 'var(--t1)',
+                fontWeight: isVote ? 600 : 400,
               }}>
                 {para}
               </p>
-            ))}
-          </div>
-          {/* Tags de especialidad */}
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+            )
+          })}
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--bd)' }}>
             {director.tags.map(tag => (
               <span key={tag} style={{
                 fontSize: '11px', padding: '3px 8px', borderRadius: '4px',
-                background: director.colorDim, color: director.color,
-              }}>
-                {tag}
-              </span>
+                background: accentDim, color: accent,
+                border: `1px solid ${accentBd}`,
+              }}>{tag}</span>
             ))}
           </div>
-        </div>
-      )}
-
-      {status === 'error' && (
-        <div style={{ padding: '10px 16px 14px' }}>
-          <p style={{ fontSize: '12px', color: '#ff6b6b' }}>Error al obtener análisis</p>
+          <button
+            onClick={() => onClickDirector(director)}
+            style={{ marginTop: '12px', fontSize: '11px', color: 'var(--t3)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            Ver perfil completo del director →
+          </button>
         </div>
       )}
     </div>
