@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react'
-import DirectorCard from './components/DirectorCard.jsx'
+import DebateChat from './components/DebateChat.jsx'
 import DirectorModal from './components/DirectorModal.jsx'
 import DirectorsRoster from './components/DirectorsRoster.jsx'
 import VerdictPanel from './components/VerdictPanel.jsx'
@@ -266,6 +266,21 @@ export default function App() {
               </div>
             )}
 
+            {/* Conversación de la junta */}
+            <div style={{ marginBottom: '32px' }}>
+              <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '18px', fontWeight: 500 }}>
+                La conversación · clic en un director para ver su perfil
+              </p>
+              <DebateChat directors={activeDirectors} directorStates={directorStates} onClickDirector={setSelectedDirector} />
+            </div>
+
+            {/* Veredicto — la conclusión, al final de la conversación */}
+            {(verdict || verdictLoading) && (
+              <div style={{ marginBottom: '28px' }}>
+                <VerdictPanel text={verdict} loading={verdictLoading} consensus={isDone ? consensus : null} />
+              </div>
+            )}
+
             {/* Banner descarga — aparece cuando hay veredicto */}
             {isDone && verdict && (
               <div style={{ marginBottom: '28px' }}>
@@ -278,31 +293,6 @@ export default function App() {
                 />
               </div>
             )}
-
-            {/* Veredicto */}
-            {(verdict || verdictLoading) && (
-              <div style={{ marginBottom: '36px' }}>
-                <VerdictPanel text={verdict} loading={verdictLoading} consensus={isDone ? consensus : null} />
-              </div>
-            )}
-
-            {/* Grid directores */}
-            <div>
-              <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '14px', fontWeight: 500 }}>
-                Análisis individual · clic para expandir o ver perfil
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '10px' }}>
-                {activeDirectors.map((director, i) => (
-                  <DirectorCard
-                    key={director.id}
-                    director={director}
-                    state={directorStates[director.id]}
-                    index={i}
-                    onClickDirector={setSelectedDirector}
-                  />
-                ))}
-              </div>
-            </div>
 
             {isDone && (
               <div style={{ textAlign: 'center', marginTop: '48px' }}>

@@ -6,7 +6,10 @@ function extractVoteLine(text) {
   if (!text) return null
   const lines = text.split('\n').filter(l => l.trim())
   const keywords = ['voto:', 'posición:', 'evaluación:', 'veredicto:', 'proceder', 'apruebo', 'viable', 'riesgo', 'sí,', 'no,', 'apoyo', 'confianza']
-  for (const line of lines.slice(-5)) {
+  // Recorre desde el final hacia atrás: los directores concluyen con su voto,
+  // así que la última línea que matchea es más fiable que la primera (que puede
+  // mencionar "riesgo" o "apoyo" de pasada sin ser la posición final).
+  for (const line of lines.slice(-5).reverse()) {
     const lo = line.toLowerCase()
     if (keywords.some(k => lo.includes(k))) return line
   }
