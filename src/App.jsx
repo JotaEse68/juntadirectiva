@@ -1,14 +1,16 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import DirectorCard from './components/DirectorCard.jsx'
 import DirectorModal from './components/DirectorModal.jsx'
+import DirectorsRoster from './components/DirectorsRoster.jsx'
 import VerdictPanel from './components/VerdictPanel.jsx'
 import DownloadBanner from './components/DownloadBanner.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import { useBoard } from './hooks/useBoard.js'
 import { useContextBuilder } from './hooks/useContext.js'
 import ContextPanel from './components/ContextPanel.jsx'
-import { DIRECTORS, MEETING_TYPES } from './lib/directors.js'
+import { DIRECTORS, MEETING_TYPES, selectDirectorsForMeeting, orderForDebate } from './lib/directors.js'
 import { PROVIDERS } from './lib/providers.js'
+import { computeConsensus } from './lib/consensus.js'
 
 const STORAGE_KEY = 'junta_api_key'
 const STORAGE_PROVIDER_KEY = 'junta_api_provider'
@@ -17,6 +19,7 @@ const MAX_CHARS = 800
 export default function App() {
   const [situation, setSituation]   = useState('')
   const [meetingType, setMeetingType] = useState('decision')
+  const [selectedIds, setSelectedIds] = useState(() => selectDirectorsForMeeting('decision', DIRECTORS).map(d => d.id))
   const [apiKey, setApiKey]         = useState(() => localStorage.getItem(STORAGE_KEY) || '')
   const [apiProvider, setApiProvider] = useState(() => localStorage.getItem(STORAGE_PROVIDER_KEY) || 'claude')
   const [showSettings, setShowSettings] = useState(false)
@@ -26,6 +29,17 @@ export default function App() {
   const { items: ctxItems, addNote, processFile, processURL, removeItem: removeCtxItem,
           buildContextBlock, hasContext, isProcessing: ctxProcessing } = useContextBuilder()
 
+  const consensus = useMemo(() => computeConsensus(directorStates), [directorStates])
+
+  const toggleDirector = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const handleMeetingTypeChange = (id) => {
+    setMeetingType(id)
+    setSelectedIds(selectDirectorsForMeeting(id, DIRECTORS).map(d => d.id))
+  }
+
   const isIdle     = phase === 'idle'
   const isRunning  = !isIdle && phase !== 'done'
   const isDone     = phase === 'done'
@@ -34,9 +48,10 @@ export default function App() {
   const totalCount = activeDirectors.length
 
   const handleConvene = useCallback(async () => {
-    if (!situation.trim() || !isIdle) return
-    await conveneBoard({ situation: situation.trim(), meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider })
-  }, [situation, meetingType, apiKey, apiProvider, isIdle, conveneBoard])
+    if (!situation.trim() || !isIdle || selectedIds.length === 0) return
+    const directors = orderForDebate(selectedIds, DIRECTORS)
+    await conveneBoard({ directors, situation: situation.trim(), meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider })
+  }, [situation, meetingType, selectedIds, apiKey, apiProvider, isIdle, conveneBoard])
 
   const handleReset = () => { reset(); setSituation('') }
   const handleSaveKey = (provider, key) => {
@@ -101,55 +116,60 @@ export default function App() {
                 Antes de decidir,<br /><em style={{ color: 'var(--blue)' }}>convoca la junta.</em>
               </h1>
               <p style={{ fontSize: '16px', color: 'var(--t2)', maxWidth: '480px', margin: '0 auto', lineHeight: 1.7 }}>
-                12 directores especializados debaten tu situación en paralelo y emiten un veredicto ejecutivo con próximos pasos.
+                12 directores especializados debaten tu situación entre sí — se escuchan, se rebaten — y emiten un veredicto ejecutivo con próximos pasos.
               </p>
             </div>
 
-            {/* El elenco — pills clicables */}
+            {/* El elenco — pills seleccionables: quién participa en esta sesión */}
             <div className="fade-up" style={{ marginBottom: '48px', animationDelay: '.08s' }}>
               <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '14px', textAlign: 'center', fontWeight: 500 }}>
-                La junta — clic para conocer a cada director
+                Elige quién participa · {selectedIds.length} de {DIRECTORS.length} directores
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-                {DIRECTORS.map(d => (
-                  <button
-                    key={d.id}
-                    onClick={() => setSelectedDirector(d)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '7px',
-                      padding: '7px 14px', borderRadius: '24px',
-                      border: `1px solid ${d.id === 'jottarina' ? 'var(--red-bd)' : 'var(--bd)'}`,
-                      background: d.id === 'jottarina' ? 'var(--red-dim)' : 'rgba(255,255,255,0.03)',
-                      color: d.id === 'jottarina' ? 'var(--red)' : 'var(--t2)',
-                      cursor: 'pointer', fontSize: '12px', fontWeight: 500,
-                      transition: 'all .15s',
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.borderColor = d.id === 'jottarina' ? 'var(--red)' : 'var(--blue-bd)'
-                      e.currentTarget.style.color = d.id === 'jottarina' ? 'var(--red)' : 'var(--blue)'
-                      e.currentTarget.style.background = d.id === 'jottarina' ? 'var(--red-dim)' : 'var(--blue-dim)'
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.borderColor = d.id === 'jottarina' ? 'var(--red-bd)' : 'var(--bd)'
-                      e.currentTarget.style.color = d.id === 'jottarina' ? 'var(--red)' : 'var(--t2)'
-                      e.currentTarget.style.background = d.id === 'jottarina' ? 'var(--red-dim)' : 'rgba(255,255,255,0.03)'
-                    }}
-                  >
-                    <span>{d.emoji}</span>
-                    <span>{d.name}</span>
-                    <span style={{ fontWeight: 400, opacity: .6, fontSize: '11px' }}>· {d.title.split(' ').slice(-1)[0]}</span>
-                  </button>
-                ))}
+                {DIRECTORS.map(d => {
+                  const isOn = selectedIds.includes(d.id)
+                  const isJottarina = d.id === 'jottarina'
+                  const activeBorder = isJottarina ? 'var(--red-bd)' : 'var(--blue-bd)'
+                  const activeColor  = isJottarina ? 'var(--red)' : 'var(--blue)'
+                  const activeBg     = isJottarina ? 'var(--red-dim)' : 'var(--blue-dim)'
+                  return (
+                    <button
+                      key={d.id}
+                      onClick={() => toggleDirector(d.id)}
+                      title={isOn ? `Quitar a ${d.name} de esta sesión` : `Incluir a ${d.name} en esta sesión`}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '7px',
+                        padding: '7px 14px', borderRadius: '24px',
+                        border: `1px solid ${isOn ? activeBorder : 'var(--bd)'}`,
+                        background: isOn ? activeBg : 'rgba(255,255,255,0.03)',
+                        color: isOn ? activeColor : 'var(--t3)',
+                        opacity: isOn ? 1 : 0.55,
+                        cursor: 'pointer', fontSize: '12px', fontWeight: 500,
+                        transition: 'all .15s',
+                      }}
+                    >
+                      <span>{d.emoji}</span>
+                      <span>{d.name}</span>
+                      <span style={{ fontWeight: 400, opacity: .6, fontSize: '11px' }}>· {d.title.split(' ').slice(-1)[0]}</span>
+                      {!isOn && <span style={{ fontSize: '11px' }}>✕</span>}
+                    </button>
+                  )
+                })}
               </div>
+              {selectedIds.length > 8 && (
+                <p style={{ fontSize: '11px', color: 'var(--t3)', textAlign: 'center', marginTop: '10px' }}>
+                  El debate es secuencial (cada director escucha a los anteriores) — con {selectedIds.length} directores puede tardar varios minutos.
+                </p>
+              )}
             </div>
 
             {/* Formulario */}
             <div className="fade-up" style={{ animationDelay: '.14s', background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 'var(--r-xl)', padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <div>
                 <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '12px', fontWeight: 500 }}>Tipo de reunión</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px' }}>
                   {MEETING_TYPES.map(mt => (
-                    <button key={mt.id} onClick={() => setMeetingType(mt.id)}
+                    <button key={mt.id} onClick={() => handleMeetingTypeChange(mt.id)}
                       style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', textAlign: 'left', border: `1px solid ${meetingType === mt.id ? 'var(--blue-bd)' : 'var(--bd)'}`, background: meetingType === mt.id ? 'var(--blue-dim)' : 'var(--bg3)', transition: 'all .2s' }}>
                       <div style={{ fontSize: '16px', marginBottom: '4px' }}>{mt.icon}</div>
                       <div style={{ fontSize: '13px', fontWeight: 600, color: meetingType === mt.id ? 'var(--blue)' : 'var(--t1)', marginBottom: '2px' }}>{mt.label}</div>
@@ -204,10 +224,10 @@ export default function App() {
 
               <button
                 onClick={handleConvene}
-                disabled={!situation.trim() || ctxProcessing}
-                style={{ padding: '17px', borderRadius: 'var(--r-md)', border: 'none', background: situation.trim() ? 'var(--blue)' : 'var(--bg3)', color: situation.trim() ? 'var(--bg0)' : 'var(--t3)', fontSize: '15px', fontWeight: 700, cursor: situation.trim() ? 'pointer' : 'not-allowed', transition: 'all .2s', letterSpacing: '.02em' }}
+                disabled={!situation.trim() || ctxProcessing || selectedIds.length === 0}
+                style={{ padding: '17px', borderRadius: 'var(--r-md)', border: 'none', background: (situation.trim() && selectedIds.length > 0) ? 'var(--blue)' : 'var(--bg3)', color: (situation.trim() && selectedIds.length > 0) ? 'var(--bg0)' : 'var(--t3)', fontSize: '15px', fontWeight: 700, cursor: (situation.trim() && selectedIds.length > 0) ? 'pointer' : 'not-allowed', transition: 'all .2s', letterSpacing: '.02em' }}
               >
-                🏛️ Convocar la junta
+                {selectedIds.length === 0 ? '⚠️ Elige al menos un director' : '🏛️ Convocar la junta'}
               </button>
 
               <p style={{ fontSize: '12px', color: 'var(--t3)', textAlign: 'center' }}>
@@ -262,7 +282,7 @@ export default function App() {
             {/* Veredicto */}
             {(verdict || verdictLoading) && (
               <div style={{ marginBottom: '36px' }}>
-                <VerdictPanel text={verdict} loading={verdictLoading} />
+                <VerdictPanel text={verdict} loading={verdictLoading} consensus={isDone ? consensus : null} />
               </div>
             )}
 
@@ -294,8 +314,10 @@ export default function App() {
           </div>
         )}
 
-        <footer style={{ marginTop: '72px', paddingTop: '24px', borderTop: '1px solid var(--bd)', textAlign: 'center' }}>
-          <p style={{ fontSize: '11px', color: 'var(--t3)' }}>Junta Directiva AI · 12 expertos · Powered by Claude · 2026</p>
+        <DirectorsRoster directors={DIRECTORS} onClickDirector={setSelectedDirector} />
+
+        <footer style={{ marginTop: '48px', paddingTop: '24px', borderTop: '1px solid var(--bd)', textAlign: 'center' }}>
+          <p style={{ fontSize: '11px', color: 'var(--t3)' }}>Junta Directiva AI · 12 expertos · Powered by Claude, OpenAI o Gemini · 2026</p>
         </footer>
       </main>
 

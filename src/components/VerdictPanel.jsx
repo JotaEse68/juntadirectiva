@@ -12,7 +12,36 @@ function detectVerdict(text) {
   return null
 }
 
-export default function VerdictPanel({ text, loading }) {
+function ConsensusBar({ consensus }) {
+  if (!consensus || consensus.total === 0) return null
+  const { favor, contra, mixto, sinDato, total } = consensus
+  const segments = [
+    { key: 'favor', value: favor, color: 'var(--blue)', label: 'a favor' },
+    { key: 'mixto', value: mixto, color: '#f5a623', label: 'con matices' },
+    { key: 'contra', value: contra, color: 'var(--red)', label: 'en contra' },
+    { key: 'sinDato', value: sinDato, color: 'var(--bd)', label: 'sin postura clara' },
+  ].filter(s => s.value > 0)
+
+  return (
+    <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--bd)' }}>
+      <div style={{ display: 'flex', width: '100%', height: '6px', borderRadius: '3px', overflow: 'hidden', marginBottom: '8px' }}>
+        {segments.map(s => (
+          <div key={s.key} style={{ width: `${(s.value / total) * 100}%`, background: s.color }} />
+        ))}
+      </div>
+      <p style={{ fontSize: '11px', color: 'var(--t3)' }}>
+        {segments.map((s, i) => (
+          <span key={s.key}>
+            {i > 0 && ' · '}
+            <span style={{ color: s.color, fontWeight: 600 }}>{s.value}</span> {s.label}
+          </span>
+        ))}
+      </p>
+    </div>
+  )
+}
+
+export default function VerdictPanel({ text, loading, consensus }) {
   if (loading) {
     return (
       <div style={{ background: 'var(--bg2)', border: '1px solid var(--blue-bd)', borderRadius: 'var(--r-xl)', padding: '28px', textAlign: 'center' }}>
@@ -43,6 +72,8 @@ export default function VerdictPanel({ text, loading }) {
           </div>
         )}
       </div>
+
+      <ConsensusBar consensus={consensus} />
 
       {/* Body */}
       <div style={{ padding: '22px 24px' }}>

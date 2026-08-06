@@ -1,9 +1,6 @@
 import { useState, useCallback } from 'react'
-import { DIRECTORS, selectDirectorsForMeeting } from '../lib/directors.js'
+import { MEETING_TYPES, MEETING_FRAMING } from '../lib/directors.js'
 import { PROVIDERS } from '../lib/providers.js'
-
-// Llama al modelo elegido (Claude directo, o proxy propio para OpenAI/Gemini) con streaming
-import { MEETING_TYPES } from '../lib/directors.js'
 
 // Arma la petición según el proveedor. Claude permite llamada directa desde el navegador;
 // OpenAI y Gemini bloquean CORS, así que se reenvían por nuestro propio proxy (/api/openai, /api/gemini)
@@ -85,14 +82,30 @@ async function streamCompletion({ provider, apiKey, system, userMsg, maxTokens, 
   return fullText
 }
 
-async function callDirector({ director, situation, meetingType, contextBlock, apiKey, provider, onChunk }) {
+// Recorta la intervención de un director ya cerrado a un resumen corto para que el
+// contexto del debate no crezca sin control a medida que hablan más directores.
+function excerpt(text, maxChars = 380) {
+  if (text.length <= maxChars) return text
+  return text.slice(0, maxChars).trim() + '…'
+}
+
+function buildDebateRecap(debateSoFar) {
+  if (!debateSoFar.length) return ''
+  const turns = debateSoFar.map(({ director, text }) => `${director.name} (${director.title}): ${excerpt(text)}`).join('\n\n')
+  return `\n\nDEBATE HASTA AHORA (tus colegas ya hablaron, en este orden):\n${turns}\n\nAntes de dar tu propio análisis, reacciona en 1-2 frases a lo que han dicho tus colegas — cita a quien corresponda por nombre, coincide o discrepa explícitamente. Luego da tu aportación completa desde tu especialidad.`
+}
+
+async function callDirector({ director, situation, meetingType, contextBlock, debateSoFar, apiKey, provider, onChunk }) {
   const meetingLabel = MEETING_TYPES.find(m => m.id === meetingType)?.label || 'Reunión'
+  const framing = MEETING_FRAMING[meetingType] || ''
 
   const contextSection = contextBlock ? ("\n\nCONTEXTO ADICIONAL:\n" + contextBlock) : ""
+  const debateSection = buildDebateRecap(debateSoFar || [])
   const userMsg = `REUNIÓN DE JUNTA — ${meetingLabel}
+${framing}
 
 SITUACIÓN:
-${situation}${contextSection}
+${situation}${contextSection}${debateSection}
 
 Como ${director.name} (${director.title}), da tu análisis experto y posición. Si el contexto adicional es relevante para tu especialidad, incorpóralo en tu análisis.`
 
@@ -136,8 +149,9 @@ export function useBoard() {
   const [rateLimitInfo, setRateLimitInfo] = useState(null)
   const [globalError, setGlobalError] = useState(null)
 
-  const conveneBoard = useCallback(async ({ situation, meetingType, contextBlock, apiKey, provider }) => {
-    const selected = selectDirectorsForMeeting(meetingType, DIRECTORS)
+  // `directors` viene ya resuelto y ordenado desde fuera (selección automática + overrides del usuario)
+  const conveneBoard = useCallback(async ({ directors, situation, meetingType, contextBlock, apiKey, provider }) => {
+    const selected = directors
     setActiveDirectors(selected)
     setDirectorStates({})
     setVerdict(null)
@@ -152,8 +166,10 @@ export function useBoard() {
     await new Promise(r => setTimeout(r, 600)) // pequeña pausa dramática
     setPhase('debating')
 
-    // Lanzar todos los directores en paralelo
-    const promises = selected.map(async (director) => {
+    // Debate secuencial: cada director habla después de escuchar a los anteriores,
+    // para que puedan reaccionar y referenciarse entre sí de verdad.
+    const debateSoFar = []
+    for (const director of selected) {
       setDirectorStates(prev => ({ ...prev, [director.id]: { status: 'streaming', text: '' } }))
 
       try {
@@ -162,6 +178,7 @@ export function useBoard() {
           situation,
           meetingType,
           contextBlock: contextBlock || '',
+          debateSoFar,
           apiKey: apiKey || null,
           provider: provider || 'claude',
           onChunk: (partial) => {
@@ -172,19 +189,17 @@ export function useBoard() {
           },
         })
         setDirectorStates(prev => ({ ...prev, [director.id]: { status: 'done', text } }))
-        return { director, text }
+        debateSoFar.push({ director, text })
       } catch (err) {
         // Rate limit en modo proxy
         if (err.message.includes('429') || err.message.toLowerCase().includes('límite')) {
           setGlobalError(err.message)
         }
         setDirectorStates(prev => ({ ...prev, [director.id]: { status: 'error', text: '', error: err.message } }))
-        return { director, text: null }
       }
-    })
+    }
 
-    const results = await Promise.all(promises)
-    const successful = results.filter(r => r.text)
+    const successful = debateSoFar
 
     if (successful.length === 0) {
       setPhase('idle')

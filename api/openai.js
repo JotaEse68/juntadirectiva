@@ -23,7 +23,7 @@ export default async function handler(req) {
   const { apiKey, model = 'gpt-4o-mini', system, userPrompt, maxTokens = 800 } = body
   if (!apiKey) return new Response(JSON.stringify({ error: 'Falta la API key de OpenAI' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (!system || !userPrompt) return new Response(JSON.stringify({ error: 'Faltan prompts' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
-  if (userPrompt.length > 6000 || system.length > 8000) return new Response(JSON.stringify({ error: 'Prompt demasiado largo' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
+  if (userPrompt.length > 12000 || system.length > 8000) return new Response(JSON.stringify({ error: 'Prompt demasiado largo' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
 
   let openaiRes
   try {

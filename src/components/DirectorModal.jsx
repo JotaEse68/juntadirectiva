@@ -69,7 +69,7 @@ export default function DirectorModal({ director, sessionVote, onClose }) {
           Qué aporta en cada sesión
         </p>
         <p style={{ fontSize: '13px', color: 'var(--t2)', lineHeight: 1.65, marginBottom: '18px' }}>
-          {getContribution(director.id)}
+          {director.contribution}
         </p>
 
         {/* Veredicto en esta sesión si existe */}
@@ -101,22 +101,4 @@ export default function DirectorModal({ director, sessionVote, onClose }) {
       </div>
     </div>
   )
-}
-
-function getContribution(id) {
-  const map = {
-    estratega: 'Identifica el patrón estratégico que otros no ven. Posicionamiento competitivo, consecuencias a largo plazo y la pregunta estratégica que nadie está haciéndose.',
-    financiero: 'Traduce cada decisión a números reales: cash flow, ROI, punto de equilibrio. Señala el riesgo financiero invisible y vota con condiciones concretas.',
-    marketing: 'Lee el mercado desde fuera. Qué mensaje comunica la decisión, cómo se percibe, y la acción de marketing concreta para las próximas dos semanas.',
-    operaciones: 'Destruye planes que no sobreviven al contacto con la realidad. Da el plan de ejecución en 3 pasos con timeline y detecta los cuellos de botella reales.',
-    legal: 'Identifica el riesgo legal o regulatorio antes de que se materialice. No frena — construye sobre base sólida. Evalúa el nivel de riesgo con justificación.',
-    tecnologia: 'Convierte el problema en solución técnica concreta. Nombra la herramienta específica, evalúa la complejidad de implementación y el costo de no automatizar.',
-    ventas: 'Todo lo traduce a revenue. La oportunidad de ingreso más inmediata, la táctica de conversión para esta semana, y el impacto estimado en pipeline.',
-    producto: 'Representa al usuario que no está en la sala. Identifica la fricción principal que enfrentará el cliente y la mejora de producto más urgente.',
-    personas: 'Ve lo que el equipo puede y no puede sostener. Detecta el reto humano invisible y da la recomendación de liderazgo más importante.',
-    datos: 'Exige el dato que falta antes de comprometerse. Define los KPIs específicos para medir el resultado y detecta los sesgos de confirmación en la sala.',
-    mentor: 'Ha visto esto antes, varias veces. Pone todo en perspectiva histórica e identifica el único factor que determinará si esto funciona o no.',
-    jottarina: 'Dice lo que todos piensan pero nadie se atreve a decir. Nombra el autoengaño, el elefante en la sala y la verdad incómoda — siempre con una dirección accionable al final.',
-  }
-  return map[id] || ''
 }
