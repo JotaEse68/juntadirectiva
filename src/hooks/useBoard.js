@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { MEETING_TYPES, MEETING_FRAMING } from '../lib/directors.js'
 import { streamCompletion } from '../lib/aiClient.js'
 
@@ -27,7 +27,7 @@ ${framing}
 SITUACIÓN:
 ${situation}${contextSection}${debateSection}
 
-Como ${director.name} (${director.title}), da tu análisis experto y posición. Si el contexto adicional es relevante para tu especialidad, incorpóralo en tu análisis.`
+Como ${director.name} (${director.title}), da tu análisis experto y posición. Si el contexto adicional es relevante para tu especialidad, incorpóralo en tu análisis. Nunca te niegues a opinar alegando que no puedes acceder a una URL o navegar por internet — todo el contexto relevante ya está resuelto y resumido arriba; si algo no está cubierto ahí, trabaja igual con lo que sí tienes.`
 
   return streamCompletion({ provider, apiKey, system: director.systemPrompt, userMsg, maxTokens: 800, onChunk })
 }
@@ -68,6 +68,29 @@ export function useBoard() {
   const [activeDirectors, setActiveDirectors] = useState([])
   const [rateLimitInfo, setRateLimitInfo] = useState(null)
   const [globalError, setGlobalError] = useState(null)
+  const [isPaused, setIsPaused] = useState(false)
+
+  // El debate se pausa ENTRE turnos (no a mitad de la respuesta de un director), así que
+  // nunca se pierde contenido ya generado — solo se retiene el arranque del siguiente turno.
+  const pausedRef = useRef(false)
+  const resumeSignalRef = useRef(null)
+
+  const waitIfPaused = useCallback(() => {
+    if (!pausedRef.current) return Promise.resolve()
+    return new Promise(resolve => { resumeSignalRef.current = resolve })
+  }, [])
+
+  const pause = useCallback(() => {
+    pausedRef.current = true
+    setIsPaused(true)
+  }, [])
+
+  const resume = useCallback(() => {
+    pausedRef.current = false
+    setIsPaused(false)
+    resumeSignalRef.current?.()
+    resumeSignalRef.current = null
+  }, [])
 
   // `directors` viene ya resuelto y ordenado desde fuera (selección automática + overrides del usuario)
   const conveneBoard = useCallback(async ({ directors, situation, meetingType, contextBlock, apiKey, provider }) => {
@@ -90,6 +113,7 @@ export function useBoard() {
     // para que puedan reaccionar y referenciarse entre sí de verdad.
     const debateSoFar = []
     for (const director of selected) {
+      await waitIfPaused()
       setDirectorStates(prev => ({ ...prev, [director.id]: { status: 'streaming', text: '' } }))
 
       try {
@@ -144,9 +168,13 @@ export function useBoard() {
       setVerdictLoading(false)
       setPhase('done')
     }
-  }, [])
+  }, [waitIfPaused])
 
   const reset = useCallback(() => {
+    pausedRef.current = false
+    resumeSignalRef.current?.()
+    resumeSignalRef.current = null
+    setIsPaused(false)
     setDirectorStates({})
     setVerdict(null)
     setVerdictLoading(false)
@@ -156,8 +184,8 @@ export function useBoard() {
   }, [])
 
   return {
-    conveneBoard, reset,
+    conveneBoard, reset, pause, resume,
     directorStates, verdict, verdictLoading,
-    phase, activeDirectors, rateLimitInfo, globalError,
+    phase, activeDirectors, rateLimitInfo, globalError, isPaused,
   }
 }

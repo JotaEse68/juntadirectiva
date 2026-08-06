@@ -134,11 +134,14 @@ export function useContextBuilder() {
     const done = items.filter(it => it.status === 'done' && it.summary)
     if (done.length === 0) return ''
 
+    // Ojo: la etiqueta NO debe empezar con la URL cruda ("URL: https://...") — algunos
+    // modelos lo leen como una instrucción para navegar el enlace en vivo y se niegan,
+    // aunque el resumen ya extraído esté justo debajo. Se deja claro que ya está resuelto.
     const sections = done.map(it => {
-      const label = it.type === 'file' ? `Documento: ${it.name}`
-        : it.type === 'url' ? `URL: ${it.name}`
-        : 'Nota adicional'
-      return `[${label}]\n${it.summary}`
+      const label = it.type === 'file' ? `Documento ya leído: ${it.name}`
+        : it.type === 'url' ? `Página web ya visitada y resumida (fuente: ${it.name})`
+        : 'Nota adicional del usuario'
+      return `[${label} — usa este resumen tal cual, no hace falta acceder a la fuente original]\n${it.summary}`
     }).join('\n\n')
 
     return `CONTEXTO ADICIONAL PARA EL ANÁLISIS:\n${sections}`

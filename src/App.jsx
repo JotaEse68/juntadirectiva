@@ -29,7 +29,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [selectedDirector, setSelectedDirector] = useState(null)
 
-  const { conveneBoard, reset, directorStates, verdict, verdictLoading, phase, activeDirectors, globalError } = useBoard()
+  const { conveneBoard, reset, pause, resume, directorStates, verdict, verdictLoading, phase, activeDirectors, globalError, isPaused } = useBoard()
   const { items: ctxItems, addNote, processFile, processURL, removeItem: removeCtxItem,
           buildContextBlock, hasContext, isProcessing: ctxProcessing } = useContextBuilder()
   const { report, loading: reportLoading, error: reportError, generateReport, reset: resetReport } = useReport()
@@ -108,8 +108,17 @@ export default function App() {
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {isRunning && (
             <span style={{ fontSize: '12px', color: 'var(--blue)', padding: '4px 12px', borderRadius: '20px', background: 'var(--blue-dim)', border: '1px solid var(--blue-bd)' }}>
-              {phase === 'convening' ? 'Convocando...' : phase === 'debating' ? `Debate · ${doneCount}/${totalCount}` : 'Emitiendo veredicto...'}
+              {phase === 'convening' ? 'Convocando...' : phase === 'debating' ? (isPaused ? `Pausado · ${doneCount}/${totalCount}` : `Debate · ${doneCount}/${totalCount}`) : 'Emitiendo veredicto...'}
             </span>
+          )}
+          {phase === 'debating' && (
+            <button
+              onClick={isPaused ? resume : pause}
+              title={isPaused ? 'Reanudar el debate' : 'Pausar el debate — no se pierde lo ya generado'}
+              style={{ padding: '6px 10px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t3)', fontSize: '13px' }}
+            >
+              {isPaused ? '▶️' : '⏸️'}
+            </button>
           )}
           <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '20px', border: `1px solid ${apiKey ? 'var(--blue-bd)' : 'var(--bd)'}`, color: apiKey ? 'var(--blue)' : 'var(--t3)', background: apiKey ? 'var(--blue-dim)' : 'transparent' }}>
             {apiKey ? `${PROVIDERS[apiProvider]?.emoji || '🔑'} ${PROVIDERS[apiProvider]?.label || 'key propia'}` : '🌐 3/hora'}
