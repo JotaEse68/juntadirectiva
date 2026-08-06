@@ -14,7 +14,7 @@ function Bubble({ director, state, onClick }) {
   const isError = status === 'error'
   const { color, colorDim, colorBorder } = director
 
-  const vote = isDone ? classifyVote(text) : null
+  const vote = isDone ? classifyVote(director.id, text) : null
   const badge = vote ? VOTE_BADGE[vote] : null
 
   return (

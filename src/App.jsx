@@ -4,9 +4,11 @@ import DirectorModal from './components/DirectorModal.jsx'
 import DirectorsRoster from './components/DirectorsRoster.jsx'
 import VerdictPanel from './components/VerdictPanel.jsx'
 import DownloadBanner from './components/DownloadBanner.jsx'
+import ReportModal from './components/ReportModal.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import { useBoard } from './hooks/useBoard.js'
 import { useContextBuilder } from './hooks/useContext.js'
+import { useReport } from './hooks/useReport.js'
 import ContextPanel from './components/ContextPanel.jsx'
 import { DIRECTORS, MEETING_TYPES, selectDirectorsForMeeting, orderForDebate } from './lib/directors.js'
 import { PROVIDERS } from './lib/providers.js'
@@ -28,8 +30,15 @@ export default function App() {
   const { conveneBoard, reset, directorStates, verdict, verdictLoading, phase, activeDirectors, globalError } = useBoard()
   const { items: ctxItems, addNote, processFile, processURL, removeItem: removeCtxItem,
           buildContextBlock, hasContext, isProcessing: ctxProcessing } = useContextBuilder()
+  const { report, loading: reportLoading, error: reportError, generateReport, reset: resetReport } = useReport()
+  const [showReport, setShowReport] = useState(false)
 
   const consensus = useMemo(() => computeConsensus(directorStates), [directorStates])
+
+  const handleGenerateReport = () => {
+    setShowReport(true)
+    generateReport({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey: apiKey || null, provider: apiProvider })
+  }
 
   const toggleDirector = (id) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -53,7 +62,7 @@ export default function App() {
     await conveneBoard({ directors, situation: situation.trim(), meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider })
   }, [situation, meetingType, selectedIds, apiKey, apiProvider, isIdle, conveneBoard])
 
-  const handleReset = () => { reset(); setSituation('') }
+  const handleReset = () => { reset(); resetReport(); setShowReport(false); setSituation('') }
   const handleSaveKey = (provider, key) => {
     localStorage.setItem(STORAGE_KEY, key)
     localStorage.setItem(STORAGE_PROVIDER_KEY, key ? provider : 'claude')
@@ -281,15 +290,13 @@ export default function App() {
               </div>
             )}
 
-            {/* Banner descarga — aparece cuando hay veredicto */}
+            {/* Banner informe completo — aparece cuando hay veredicto */}
             {isDone && verdict && (
               <div style={{ marginBottom: '28px' }}>
                 <DownloadBanner
                   sessionData={{ directorCount: activeDirectors.length }}
-                  onPurchase={(product) => {
-                    // TODO: integrar Stripe
-                    alert(`Próximamente: pago ${product === 'bundle' ? 'bundle 9,99€' : 'unitario 4,99€'} con Stripe`)
-                  }}
+                  loading={reportLoading}
+                  onGenerate={handleGenerateReport}
                 />
               </div>
             )}
@@ -312,6 +319,16 @@ export default function App() {
       </main>
 
       {/* Modals */}
+      {showReport && (
+        <ReportModal
+          situation={situation}
+          verdict={verdict}
+          report={report}
+          loading={reportLoading}
+          error={reportError}
+          onClose={() => setShowReport(false)}
+        />
+      )}
       {showSettings && <SettingsModal currentProvider={apiProvider} currentKey={apiKey} onSave={handleSaveKey} onClose={() => setShowSettings(false)} />}
       {selectedDirector && (
         <DirectorModal
