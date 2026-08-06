@@ -5,10 +5,12 @@ import DirectorsRoster from './components/DirectorsRoster.jsx'
 import VerdictPanel from './components/VerdictPanel.jsx'
 import DownloadBanner from './components/DownloadBanner.jsx'
 import ReportModal from './components/ReportModal.jsx'
+import ChairmanChat from './components/ChairmanChat.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import { useBoard } from './hooks/useBoard.js'
 import { useContextBuilder } from './hooks/useContext.js'
 import { useReport } from './hooks/useReport.js'
+import { useChairmanChat } from './hooks/useChairmanChat.js'
 import ContextPanel from './components/ContextPanel.jsx'
 import { DIRECTORS, MEETING_TYPES, selectDirectorsForMeeting, orderForDebate } from './lib/directors.js'
 import { PROVIDERS } from './lib/providers.js'
@@ -32,12 +34,17 @@ export default function App() {
           buildContextBlock, hasContext, isProcessing: ctxProcessing } = useContextBuilder()
   const { report, loading: reportLoading, error: reportError, generateReport, reset: resetReport } = useReport()
   const [showReport, setShowReport] = useState(false)
+  const { messages: chatMessages, sending: chatSending, error: chatError, freeMessagesUsed, sendMessage: sendChatMessage, reset: resetChat } = useChairmanChat()
 
   const consensus = useMemo(() => computeConsensus(directorStates), [directorStates])
 
   const handleGenerateReport = () => {
     setShowReport(true)
     generateReport({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey: apiKey || null, provider: apiProvider })
+  }
+
+  const handleSendChat = (text) => {
+    sendChatMessage(text, { situation, activeDirectors, directorStates, verdict }, { apiKey: apiKey || null, provider: apiProvider })
   }
 
   const toggleDirector = (id) => {
@@ -62,7 +69,7 @@ export default function App() {
     await conveneBoard({ directors, situation: situation.trim(), meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider })
   }, [situation, meetingType, selectedIds, apiKey, apiProvider, isIdle, conveneBoard])
 
-  const handleReset = () => { reset(); resetReport(); setShowReport(false); setSituation('') }
+  const handleReset = () => { reset(); resetReport(); resetChat(); setShowReport(false); setSituation('') }
   const handleSaveKey = (provider, key) => {
     localStorage.setItem(STORAGE_KEY, key)
     localStorage.setItem(STORAGE_PROVIDER_KEY, key ? provider : 'claude')
@@ -299,6 +306,19 @@ export default function App() {
                   onGenerate={handleGenerateReport}
                 />
               </div>
+            )}
+
+            {/* Chat de seguimiento con el Chairman — después del veredicto */}
+            {isDone && verdict && (
+              <ChairmanChat
+                messages={chatMessages}
+                sending={chatSending}
+                error={chatError}
+                freeMessagesUsed={freeMessagesUsed}
+                hasKey={!!apiKey}
+                onSend={handleSendChat}
+                onOpenSettings={() => setShowSettings(true)}
+              />
             )}
 
             {isDone && (

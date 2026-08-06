@@ -1,7 +1,10 @@
 export const config = { runtime: 'edge' }
 
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000
-const RATE_LIMIT_MAX = 3  // 3 reuniones/hora (cada una hace ~9 llamadas internamente)
+// El límite cuenta llamadas individuales, no sesiones. Una junta completa hace ~9 llamadas
+// (una por director + veredicto), más hasta 10 mensajes de seguimiento al Chairman — 30 cubre
+// una sesión completa con margen para el chat sin dejar el modo gratuito prácticamente inútil.
+const RATE_LIMIT_MAX = 30
 const ipStore = new Map()
 
 function getIP(req) {
@@ -47,7 +50,7 @@ export default async function handler(req) {
   const { ok, remaining, resetAt } = checkRate(ip)
   if (!ok) {
     const min = Math.ceil((resetAt - Date.now()) / 60000)
-    return new Response(JSON.stringify({ error: `Límite de ${RATE_LIMIT_MAX} reuniones por hora alcanzado. Vuelve en ${min} min o usa tu propia API key.`, code: 'RATE_LIMITED', resetAt }), {
+    return new Response(JSON.stringify({ error: `Límite de uso gratuito alcanzado por esta hora. Vuelve en ${min} min o usa tu propia API key para uso ilimitado.`, code: 'RATE_LIMITED', resetAt }), {
       status: 429, headers: { ...c, 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil((resetAt - Date.now()) / 1000)) }
     })
   }
