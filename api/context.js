@@ -52,17 +52,14 @@ function extractTextFromHTML(html) {
   return clean.slice(0, 8000)
 }
 
-// Resume el texto con Claude
-async function summarize(text, sourceType, apiKey) {
-  const systemPrompt = `Eres un asistente especializado en extraer y resumir información relevante para la toma de decisiones empresariales.
+const SUMMARY_SYSTEM_PROMPT = `Eres un asistente especializado en extraer y resumir información relevante para la toma de decisiones empresariales.
 Tu tarea: analizar el contenido proporcionado y extraer un briefing ejecutivo conciso (máximo 400 palabras) con:
 1. De qué trata el documento/URL/nota
 2. Datos y hechos clave relevantes para decisiones de negocio
 3. Contexto importante que una junta directiva debería conocer
 Sé directo y específico. Solo incluye información realmente relevante.`
 
-  const userPrompt = `Analiza este contenido (${sourceType}) y extrae el briefing ejecutivo:\n\n${text}`
-
+async function summarizeClaude(userPrompt, apiKey) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -73,14 +70,52 @@ Sé directo y específico. Solo incluye información realmente relevante.`
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 600,
-      system: systemPrompt,
+      system: SUMMARY_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userPrompt }],
     }),
   })
-
   if (!res.ok) throw new Error(`Anthropic error ${res.status}`)
   const data = await res.json()
   return data.content?.[0]?.text || ''
+}
+
+async function summarizeOpenAI(userPrompt, apiKey) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      max_tokens: 600,
+      messages: [{ role: 'system', content: SUMMARY_SYSTEM_PROMPT }, { role: 'user', content: userPrompt }],
+    }),
+  })
+  if (!res.ok) throw new Error(`OpenAI error ${res.status}`)
+  const data = await res.json()
+  return data.choices?.[0]?.message?.content || ''
+}
+
+async function summarizeGemini(userPrompt, apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${encodeURIComponent(apiKey)}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: SUMMARY_SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      generationConfig: { maxOutputTokens: 600 },
+    }),
+  })
+  if (!res.ok) throw new Error(`Gemini error ${res.status}`)
+  const data = await res.json()
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+}
+
+// Resume el texto con el proveedor elegido. En modo gratuito (sin clientApiKey) siempre es Claude.
+async function summarize(text, sourceType, apiKey, provider) {
+  const userPrompt = `Analiza este contenido (${sourceType}) y extrae el briefing ejecutivo:\n\n${text}`
+  if (provider === 'openai') return summarizeOpenAI(userPrompt, apiKey)
+  if (provider === 'gemini') return summarizeGemini(userPrompt, apiKey)
+  return summarizeClaude(userPrompt, apiKey)
 }
 
 export default async function handler(req) {
@@ -102,6 +137,8 @@ export default async function handler(req) {
   }
 
   const { type, content, url, clientApiKey } = body
+  // Modo gratuito (sin key propia) siempre usa Claude con la key del servidor.
+  const provider = clientApiKey ? (body.provider || 'claude') : 'claude'
   const apiKey = clientApiKey || process.env.ANTHROPIC_API_KEY
   if (!apiKey) return new Response(JSON.stringify({ error: 'Sin API key' }), { status: 503, headers: { ...c, 'Content-Type': 'application/json' } })
 
@@ -148,7 +185,7 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ error: 'Tipo no soportado' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
     }
 
-    const summary = await summarize(rawText, sourceType, apiKey)
+    const summary = await summarize(rawText, sourceType, apiKey, provider)
     return new Response(JSON.stringify({ summary, chars: rawText.length }), {
       status: 200, headers: { ...c, 'Content-Type': 'application/json' }
     })

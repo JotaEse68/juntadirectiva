@@ -1,53 +1,65 @@
 import { useState, useCallback } from 'react'
 import { DIRECTORS, selectDirectorsForMeeting } from '../lib/directors.js'
+import { PROVIDERS } from '../lib/providers.js'
 
-// Llama a Anthropic para un director específico con streaming
+// Llama al modelo elegido (Claude directo, o proxy propio para OpenAI/Gemini) con streaming
 import { MEETING_TYPES } from '../lib/directors.js'
 
-async function callDirector({ director, situation, meetingType, contextBlock, apiKey, onChunk }) {
-  const meetingLabel = MEETING_TYPES.find(m => m.id === meetingType)?.label || 'Reunión'
+// Arma la petición según el proveedor. Claude permite llamada directa desde el navegador;
+// OpenAI y Gemini bloquean CORS, así que se reenvían por nuestro propio proxy (/api/openai, /api/gemini)
+// que solo pasa la key del usuario sin guardarla.
+function buildRequest({ provider, apiKey, system, userMsg, maxTokens }) {
+  const model = PROVIDERS[provider]?.model
 
-  const contextSection = contextBlock ? ("\n\nCONTEXTO ADICIONAL:\n" + contextBlock) : ""
-  const userMsg = `REUNIÓN DE JUNTA — ${meetingLabel}
+  if (provider === 'openai') {
+    return {
+      endpoint: '/api/openai',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey, model, system, userPrompt: userMsg, maxTokens }),
+    }
+  }
+  if (provider === 'gemini') {
+    return {
+      endpoint: '/api/gemini',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey, model, system, userPrompt: userMsg, maxTokens }),
+    }
+  }
+  // Claude con key propia: directo a Anthropic
+  return {
+    endpoint: 'https://api.anthropic.com/v1/messages',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: userMsg }], stream: true }),
+  }
+}
 
-SITUACIÓN:
-${situation}${contextSection}
+// Extrae el texto incremental de un evento SSE ya parseado, según el proveedor
+function extractDelta(provider, parsed) {
+  if (provider === 'openai') return parsed.choices?.[0]?.delta?.content || ''
+  if (provider === 'gemini') return parsed.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') return parsed.delta.text
+  return ''
+}
 
-Como ${director.name} (${director.title}), da tu análisis experto y posición. Si el contexto adicional es relevante para tu especialidad, incorpóralo en tu análisis.`
+// Llamada genérica con streaming, usada tanto para directores como para el veredicto.
+// Sin apiKey (modo gratuito) siempre pasa por /api/coach con Claude, sea cual sea el provider elegido.
+async function streamCompletion({ provider, apiKey, system, userMsg, maxTokens, onChunk }) {
+  const req = apiKey
+    ? buildRequest({ provider, apiKey, system, userMsg, maxTokens })
+    : { endpoint: '/api/coach', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemPrompt: system, userPrompt: userMsg, maxTokens }) }
 
-  const endpoint = apiKey
-    ? 'https://api.anthropic.com/v1/messages'
-    : '/api/coach'
-
-  const headers = apiKey
-    ? {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      }
-    : { 'Content-Type': 'application/json' }
-
-  const body = apiKey
-    ? JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 800,
-        system: director.systemPrompt,
-        messages: [{ role: 'user', content: userMsg }],
-        stream: true,
-      })
-    : JSON.stringify({
-        systemPrompt: director.systemPrompt,
-        userPrompt: userMsg,
-        maxTokens: 800,
-      })
-
-  const res = await fetch(endpoint, { method: 'POST', headers, body })
+  const res = await fetch(req.endpoint, { method: 'POST', headers: req.headers, body: req.body })
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
     throw new Error(data.error || `Error ${res.status}`)
   }
 
+  const effectiveProvider = apiKey ? provider : 'claude'
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let fullText = ''
@@ -62,9 +74,10 @@ Como ${director.name} (${director.title}), da tu análisis experto y posición. 
       if (data === '[DONE]') continue
       try {
         const parsed = JSON.parse(data)
-        if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
-          fullText += parsed.delta.text
-          onChunk(fullText)
+        const delta = extractDelta(effectiveProvider, parsed)
+        if (delta) {
+          fullText += delta
+          onChunk?.(fullText)
         }
       } catch { /* skip */ }
     }
@@ -72,8 +85,22 @@ Como ${director.name} (${director.title}), da tu análisis experto y posición. 
   return fullText
 }
 
+async function callDirector({ director, situation, meetingType, contextBlock, apiKey, provider, onChunk }) {
+  const meetingLabel = MEETING_TYPES.find(m => m.id === meetingType)?.label || 'Reunión'
+
+  const contextSection = contextBlock ? ("\n\nCONTEXTO ADICIONAL:\n" + contextBlock) : ""
+  const userMsg = `REUNIÓN DE JUNTA — ${meetingLabel}
+
+SITUACIÓN:
+${situation}${contextSection}
+
+Como ${director.name} (${director.title}), da tu análisis experto y posición. Si el contexto adicional es relevante para tu especialidad, incorpóralo en tu análisis.`
+
+  return streamCompletion({ provider, apiKey, system: director.systemPrompt, userMsg, maxTokens: 800, onChunk })
+}
+
 // Llama al Chairman para el veredicto final basado en todos los análisis
-async function callVerdict({ situation, meetingType, responses, apiKey }) {
+async function callVerdict({ situation, meetingType, responses, apiKey, provider }) {
   const summaries = responses
     .map(r => `${r.director.name} (${r.director.title}):\n${r.text}`)
     .join('\n\n---\n\n')
@@ -96,41 +123,7 @@ ${summaries}
 
 Sintetiza el debate y emite el veredicto final de la junta.`
 
-  const endpoint = apiKey ? 'https://api.anthropic.com/v1/messages' : '/api/coach'
-  const headers = apiKey
-    ? { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }
-    : { 'Content-Type': 'application/json' }
-
-  const body = apiKey
-    ? JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 600, system: verdictSystem, messages: [{ role: 'user', content: verdictMsg }], stream: true })
-    : JSON.stringify({ systemPrompt: verdictSystem, userPrompt: verdictMsg, maxTokens: 600 })
-
-  const res = await fetch(endpoint, { method: 'POST', headers, body })
-  if (!res.ok) throw new Error(`Error en veredicto ${res.status}`)
-
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let fullText = ''
-  const chunks = []
-
-  // No hace streaming del veredicto — lo devuelve completo
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    const lines = decoder.decode(value).split('\n')
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      const data = line.slice(6).trim()
-      if (data === '[DONE]') continue
-      try {
-        const parsed = JSON.parse(data)
-        if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
-          fullText += parsed.delta.text
-        }
-      } catch { /* skip */ }
-    }
-  }
-  return fullText
+  return streamCompletion({ provider, apiKey, system: verdictSystem, userMsg: verdictMsg, maxTokens: 600 })
 }
 
 export function useBoard() {
@@ -143,7 +136,7 @@ export function useBoard() {
   const [rateLimitInfo, setRateLimitInfo] = useState(null)
   const [globalError, setGlobalError] = useState(null)
 
-  const conveneBoard = useCallback(async ({ situation, meetingType, contextBlock, apiKey }) => {
+  const conveneBoard = useCallback(async ({ situation, meetingType, contextBlock, apiKey, provider }) => {
     const selected = selectDirectorsForMeeting(meetingType, DIRECTORS)
     setActiveDirectors(selected)
     setDirectorStates({})
@@ -170,6 +163,7 @@ export function useBoard() {
           meetingType,
           contextBlock: contextBlock || '',
           apiKey: apiKey || null,
+          provider: provider || 'claude',
           onChunk: (partial) => {
             setDirectorStates(prev => ({
               ...prev,
@@ -206,6 +200,7 @@ export function useBoard() {
         meetingType,
         responses: successful,
         apiKey: apiKey || null,
+        provider: provider || 'claude',
       })
       setVerdict(verdictText)
     } catch (err) {

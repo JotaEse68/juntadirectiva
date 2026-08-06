@@ -8,14 +8,17 @@ import { useBoard } from './hooks/useBoard.js'
 import { useContextBuilder } from './hooks/useContext.js'
 import ContextPanel from './components/ContextPanel.jsx'
 import { DIRECTORS, MEETING_TYPES } from './lib/directors.js'
+import { PROVIDERS } from './lib/providers.js'
 
 const STORAGE_KEY = 'junta_api_key'
+const STORAGE_PROVIDER_KEY = 'junta_api_provider'
 const MAX_CHARS = 800
 
 export default function App() {
   const [situation, setSituation]   = useState('')
   const [meetingType, setMeetingType] = useState('decision')
   const [apiKey, setApiKey]         = useState(() => localStorage.getItem(STORAGE_KEY) || '')
+  const [apiProvider, setApiProvider] = useState(() => localStorage.getItem(STORAGE_PROVIDER_KEY) || 'claude')
   const [showSettings, setShowSettings] = useState(false)
   const [selectedDirector, setSelectedDirector] = useState(null)
 
@@ -32,11 +35,16 @@ export default function App() {
 
   const handleConvene = useCallback(async () => {
     if (!situation.trim() || !isIdle) return
-    await conveneBoard({ situation: situation.trim(), meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null })
-  }, [situation, meetingType, apiKey, isIdle, conveneBoard])
+    await conveneBoard({ situation: situation.trim(), meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider })
+  }, [situation, meetingType, apiKey, apiProvider, isIdle, conveneBoard])
 
   const handleReset = () => { reset(); setSituation('') }
-  const handleSaveKey = (key) => { localStorage.setItem(STORAGE_KEY, key); setApiKey(key) }
+  const handleSaveKey = (provider, key) => {
+    localStorage.setItem(STORAGE_KEY, key)
+    localStorage.setItem(STORAGE_PROVIDER_KEY, key ? provider : 'claude')
+    setApiKey(key)
+    setApiProvider(key ? provider : 'claude')
+  }
 
   // Extrae el voto de un director del texto generado
   const getDirectorVote = (dirId) => {
@@ -73,7 +81,7 @@ export default function App() {
             </span>
           )}
           <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '20px', border: `1px solid ${apiKey ? 'var(--blue-bd)' : 'var(--bd)'}`, color: apiKey ? 'var(--blue)' : 'var(--t3)', background: apiKey ? 'var(--blue-dim)' : 'transparent' }}>
-            {apiKey ? '🔑 key propia' : '🌐 3/hora'}
+            {apiKey ? `${PROVIDERS[apiProvider]?.emoji || '🔑'} ${PROVIDERS[apiProvider]?.label || 'key propia'}` : '🌐 3/hora'}
           </span>
           <button onClick={() => setShowSettings(true)} style={{ padding: '6px 10px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t3)', fontSize: '13px' }}>⚙️</button>
         </div>
@@ -186,9 +194,9 @@ export default function App() {
                 </div>
                 <ContextPanel
                   items={ctxItems}
-                  onProcessFile={(f) => processFile(f, apiKey||null)}
-                  onProcessURL={(url) => processURL(url, apiKey||null)}
-                  onAddNote={(text) => addNote(text, apiKey||null)}
+                  onProcessFile={(f) => processFile(f, apiKey||null, apiProvider)}
+                  onProcessURL={(url) => processURL(url, apiKey||null, apiProvider)}
+                  onAddNote={(text) => addNote(text, apiKey||null, apiProvider)}
                   onRemove={removeCtxItem}
                   isProcessing={ctxProcessing}
                 />
@@ -292,7 +300,7 @@ export default function App() {
       </main>
 
       {/* Modals */}
-      {showSettings && <SettingsModal currentKey={apiKey} onSave={handleSaveKey} onClose={() => setShowSettings(false)} />}
+      {showSettings && <SettingsModal currentProvider={apiProvider} currentKey={apiKey} onSave={handleSaveKey} onClose={() => setShowSettings(false)} />}
       {selectedDirector && (
         <DirectorModal
           director={selectedDirector}
