@@ -46,12 +46,6 @@ export default function DownloadBanner({ ready = true, loading, credits, onGener
         </p>
       )}
 
-      {!ready ? (
-        <p style={{ width: '100%', fontSize: '11px', color: 'var(--t3)', marginTop: '-10px' }}>
-          No tienes que comprar nada para recibir el análisis. El plan solo se ofrece cuando ya conoces el veredicto.
-        </p>
-      ) : null}
-
       {ready && (hasCredits ? (
         <button
           onClick={onGenerate}
