@@ -43,6 +43,9 @@ const kvIncr = (key) => kvCommand(`/incr/${encodeURIComponent(key)}`)
 const kvIncrBy = (key, amount) => kvCommand(`/incrby/${encodeURIComponent(key)}/${amount}`)
 const kvDecr = (key) => kvCommand(`/decr/${encodeURIComponent(key)}`)
 const kvExpire = (key, seconds) => kvCommand(`/expire/${encodeURIComponent(key)}/${seconds}`)
+async function kvSetNX(key, value) {
+  return kvCommand(`/setnx/${encodeURIComponent(key)}/${encodeURIComponent(value)}`)
+}
 
 async function checkAndConsume(ip) {
   const today = todayUTC()
@@ -80,6 +83,13 @@ async function grantExtra(ip, sessionId) {
   if (session.payment_status !== 'paid' || session.metadata?.product !== 'extra') {
     return { granted: false }
   }
+
+  const grantKey = `grant:${sessionId}`
+  const firstClaim = await kvSetNX(grantKey, '1')
+  if (firstClaim !== 1) {
+    return { granted: false, alreadyGranted: true }
+  }
+  await kvExpire(grantKey, 7 * 24 * 60 * 60) // 7 días de margen, de sobra para cualquier reintento legítimo
 
   const today = todayUTC()
   const extraKey = `analysis:${ip}:${today}:extra`
