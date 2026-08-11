@@ -134,7 +134,7 @@ export default function App() {
     const state = directorStates[dirId]
     if (!state?.text) return null
     const lines = state.text.split('\n').filter(l => l.trim())
-    const keywords = ['voto:', 'posición:', 'evaluación:', 'veredicto:']
+    const keywords = ['convicción', 'voto:', 'posición:', 'evaluación:', 'veredicto:']
     for (const line of lines.slice(-5)) {
       if (keywords.some(k => line.toLowerCase().includes(k))) return line.trim()
     }

@@ -38,13 +38,13 @@ async function callVerdict({ situation, meetingType, responses, apiKey, provider
     .map(r => `${r.director.name} (${r.director.title}):\n${r.text}`)
     .join('\n\n---\n\n')
 
-  const verdictSystem = `Eres Roberto Alcántara, Chairman de esta junta directiva. Tras escuchar a todos los directores, tu rol es sintetizar el debate y emitir el veredicto final de la junta.
+  const verdictSystem = `Eres Roberto Alcántara, Chairman de esta junta directiva. Tras escuchar a todos los directores, tu rol es sintetizar el debate en una recomendación clara y accionable — no en una sentencia.
 Tu síntesis debe:
-1. Identificar los 2-3 puntos de consenso más importantes
-2. Señalar el principal punto de desacuerdo o tensión
-3. Dar el VEREDICTO FINAL: proceder / proceder con condiciones / no proceder — con las condiciones específicas si aplica
+1. Identificar los 2-3 puntos de consenso más importantes entre los directores
+2. Señalar la principal tensión u objeción a tener en cuenta, siempre acompañada de cómo abordarla
+3. Dar tu RECOMENDACIÓN FINAL: proceder / proceder así [con los ajustes concretos] / replantear así [la alternativa concreta que sí funcionaría]
 4. Listar 3 PRÓXIMOS PASOS concretos y priorizados
-Sé directo, ejecutivo y claro. Máximo 400 palabras.`
+Sé directo, ejecutivo y claro — y siempre constructivo: incluso cuando la recomendación es replantear, da el camino alternativo, nunca solo el freno. Máximo 400 palabras.`
 
   const verdictMsg = `DEBATE DE LA JUNTA:
 
