@@ -189,13 +189,14 @@ export default function App() {
 
   // Sesiones gratis/extra (no BYOK): en cuanto llega el veredicto, se genera automáticamente
   // la ampliación de 3 secciones — legible en pantalla, sin descarga, sin gastar un crédito.
+  // No se abre el modal solo (taparía el banner de compra del informe completo, que debe
+  // quedar visible siempre) — se abre con el botón flotante "Ver informe" una vez lista.
   useEffect(() => {
     if (!isDone || !verdict) return
     if (sessionTier !== 'free' && sessionTier !== 'extra') return
     if (verdict.startsWith('Error al generar el veredicto')) return
     if (autoReportFiredRef.current) return
     autoReportFiredRef.current = true
-    setShowReport(true)
     generateReport({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey: null, provider: 'claude', tier: 'free' })
   }, [isDone, verdict, sessionTier, situation, meetingType, activeDirectors, directorStates, generateReport])
 
