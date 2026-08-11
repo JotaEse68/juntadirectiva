@@ -11,45 +11,36 @@ Como ${director.name} (${director.title}), da tu opinión exprés en 2-3 frases 
   return streamCompletion({ provider, apiKey, system: director.systemPrompt, userMsg, maxTokens: 180 })
 }
 
-const REPORT_SYSTEM_PAID = `Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces el INFORME COMPLETO — un documento notablemente más profundo y útil que el veredicto gratuito ya entregado al usuario. No repitas el veredicto, amplíalo.
+const REPORT_SYSTEM_PAID = `Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces un PLAN DE ACCIÓN OPERATIVO. El usuario ya tiene gratis el veredicto: no lo repitas ni lo reformules; conviértelo en ejecución concreta.
 
 Estructura obligatoria, con estos encabezados exactos en mayúsculas, cada uno en su propia línea:
 
-RESUMEN AMPLIADO
-Dos o tres párrafos que profundizan en el análisis más allá del veredicto rápido, conectando los puntos de vista de los directores que sí debatieron en vivo con las opiniones exprés de los que no.
+HOJA DE RUTA 30/60/90 DÍAS
+Qué debe lograrse en cada horizonte temporal, con hitos verificables.
 
-IDEAS ADICIONALES
-4 a 6 ideas concretas y accionables que NO aparecieron en el veredicto rápido.
+ACCIONES PRIORITARIAS
+6 a 8 acciones concretas, ordenadas por prioridad. Explica brevemente por qué cada una va en ese orden.
 
-RECURSOS Y HERRAMIENTAS RECOMENDADAS
-Nombra herramientas, plataformas, metodologías o tipos de recursos reales y conocidos, agrupados por categoría. No inventes URLs ni enlaces específicos — solo nombres reales de herramientas o categorías de búsqueda.
+RESPONSABLES Y ESFUERZO
+Para cada acción, propone el rol responsable y el esfuerzo estimado (bajo/medio/alto).
 
-PLAN DE MEJORA DETALLADO
-6 a 8 pasos concretos y priorizados. Para cada uno indica el esfuerzo estimado (bajo/medio/alto) entre paréntesis.
+KPIS Y SEÑALES DE ALERTA
+Entre 4 y 6 métricas con objetivo, frecuencia de revisión y la señal que exige corregir el rumbo.
 
-Sé denso en valor, cero relleno ni frases genéricas. Este informe debe sentirse claramente superior al veredicto gratuito.`
+RIESGOS Y CONTINGENCIAS
+Los 3 riesgos más relevantes, su impacto y la respuesta concreta si se materializan.
 
-const REPORT_SYSTEM_FREE = `Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces una ampliación gratuita del veredicto — más profunda que el veredicto rápido.
+ESCENARIOS DE DECISIÓN
+2 o 3 reglas tipo “si ocurre X, haz Y” para las incertidumbres centrales.
 
-Estructura obligatoria, con estos encabezados exactos en mayúsculas, cada uno en su propia línea:
-
-RESUMEN AMPLIADO
-Dos o tres párrafos que profundizan en el análisis más allá del veredicto rápido, conectando los puntos de vista de los directores que sí debatieron en vivo con las opiniones exprés de los que no.
-
-IDEAS ADICIONALES
-4 a 6 ideas concretas y accionables que NO aparecieron en el veredicto rápido.
-
-RECURSOS Y HERRAMIENTAS RECOMENDADAS
-Nombra herramientas, plataformas, metodologías o tipos de recursos reales y conocidos, agrupados por categoría. No inventes URLs ni enlaces específicos — solo nombres reales de herramientas o categorías de búsqueda.
-
-Sé denso en valor, cero relleno ni frases genéricas.`
+Sé específico, denso en valor y cero genérico. Este plan debe ser ejecutable por un equipo mañana mismo.`
 
 export function useReport() {
   const [report, setReport] = useState(null)       // { text, quickTakes: [{director,text}], locked }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const generateReport = useCallback(async ({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey, provider, tier = 'paid' }) => {
+  const generateReport = useCallback(async ({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey, provider }) => {
     setLoading(true)
     setError(null)
     setReport(null)
@@ -88,9 +79,8 @@ ${quickSummary || '(todos los directores participaron en vivo)'}
 
 Produce el informe siguiendo exactamente la estructura indicada.`
 
-      const system = tier === 'free' ? REPORT_SYSTEM_FREE : REPORT_SYSTEM_PAID
-      const text = await streamCompletion({ provider, apiKey, system, userMsg: reportPrompt, maxTokens: tier === 'free' ? 900 : 1500 })
-      setReport({ text, quickTakes, locked: tier === 'free' })
+      const text = await streamCompletion({ provider, apiKey, system: REPORT_SYSTEM_PAID, userMsg: reportPrompt, maxTokens: 1800 })
+      setReport({ text, quickTakes, locked: false })
     } catch (err) {
       setError(err.message || 'No se pudo generar el informe')
     } finally {

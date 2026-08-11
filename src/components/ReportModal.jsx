@@ -1,10 +1,12 @@
 import React from 'react'
 
 const KNOWN_HEADERS = [
-  'RESUMEN AMPLIADO',
-  'IDEAS ADICIONALES',
-  'RECURSOS Y HERRAMIENTAS RECOMENDADAS',
-  'PLAN DE MEJORA DETALLADO',
+  'HOJA DE RUTA 30/60/90 DÍAS',
+  'ACCIONES PRIORITARIAS',
+  'RESPONSABLES Y ESFUERZO',
+  'KPIS Y SEÑALES DE ALERTA',
+  'RIESGOS Y CONTINGENCIAS',
+  'ESCENARIOS DE DECISIÓN',
 ]
 
 function parseSections(text) {
@@ -71,7 +73,7 @@ export default function ReportModal({ situation, verdict, report, loading, error
           <div>
             <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '2px', fontWeight: 500 }}>Junta Directiva AI</p>
             <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--t1)' }}>
-              {report?.locked ? '📄 Ampliación del veredicto' : '📄 Informe completo'}
+              {report?.locked ? '📄 Ampliación del veredicto' : '📄 Plan de acción'}
             </p>
           </div>
           <button onClick={onClose} style={{ fontSize: '18px', color: 'var(--t3)', padding: '4px 8px' }}>×</button>
@@ -155,7 +157,7 @@ export default function ReportModal({ situation, verdict, report, loading, error
             <button onClick={onClose} style={{ flex: 1, padding: '11px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t2)', fontSize: '13px' }}>Cerrar</button>
             {!report.locked && (
               <button onClick={handleDownload} style={{ flex: 2, padding: '11px', borderRadius: 'var(--r-sm)', border: 'none', background: 'var(--blue)', color: 'var(--bg0)', fontSize: '13px', fontWeight: 700 }}>
-                ⬇️ Descargar informe
+                ⬇️ Descargar plan (.txt)
               </button>
             )}
           </div>

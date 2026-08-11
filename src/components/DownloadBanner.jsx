@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function DownloadBanner({ sessionData, loading, credits, onGenerate, onBuy, buying }) {
+export default function DownloadBanner({ ready = true, loading, credits, onGenerate, onBuy, buying }) {
   const hasCredits = credits > 0
 
   return (
@@ -17,13 +17,13 @@ export default function DownloadBanner({ sessionData, loading, credits, onGenera
       <div style={{ flex: 1, minWidth: '200px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
           <span style={{ fontSize: '16px' }}>📄</span>
-          <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--t1)' }}>Informe completo</p>
+          <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--t1)' }}>De veredicto a plan de acción</p>
         </div>
         <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.5 }}>
-          <strong style={{ color: 'var(--t1)' }}>Ya incluido gratis:</strong> veredicto ejecutivo, resumen ampliado, ideas adicionales, recursos recomendados y opinión exprés de los 12 directores.
+          <strong style={{ color: 'var(--t1)' }}>Incluido gratis:</strong> el veredicto de la junta, sus consensos, el riesgo principal y los próximos pasos inmediatos.
         </p>
         <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.5, marginTop: '5px' }}>
-          <strong style={{ color: 'var(--blue)' }}>El informe de pago añade:</strong> un plan de mejora de 6–8 pasos priorizados con esfuerzo estimado y la descarga del informe completo.
+          <strong style={{ color: 'var(--blue)' }}>El plan de acción añade:</strong> hoja de ruta 30/60/90 días, responsables, KPIs, riesgos, contingencias y descarga.
         </p>
         {hasCredits && (
           <p style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '6px' }}>
@@ -32,7 +32,14 @@ export default function DownloadBanner({ sessionData, loading, credits, onGenera
         )}
       </div>
 
-      {hasCredits ? (
+      {!ready ? (
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <p style={{ fontSize: '11px', color: 'var(--blue)', marginBottom: '6px' }}>Disponible al terminar tu veredicto</p>
+          <button disabled style={{ padding: '10px 18px', borderRadius: 'var(--r-md)', border: '1px solid var(--bd)', background: 'var(--bg3)', color: 'var(--t3)', fontSize: '12px', cursor: 'not-allowed' }}>
+            Ver el plan de acción
+          </button>
+        </div>
+      ) : hasCredits ? (
         <button
           onClick={onGenerate}
           disabled={loading}
@@ -47,7 +54,7 @@ export default function DownloadBanner({ sessionData, loading, credits, onGenera
             whiteSpace: 'nowrap', flexShrink: 0,
           }}
         >
-          {loading ? 'Generando...' : '📄 Ver informe completo'}
+          {loading ? 'Generando...' : '📄 Generar mi plan de acción'}
         </button>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end', flexShrink: 0 }}>
@@ -66,7 +73,7 @@ export default function DownloadBanner({ sessionData, loading, credits, onGenera
               whiteSpace: 'nowrap',
             }}
           >
-            <span>Comprar 3 informes</span>
+            <span>3 planes de acción</span>
             <span style={{ fontWeight: 400, opacity: .8 }}>9,99 €</span>
           </button>
 
@@ -86,7 +93,7 @@ export default function DownloadBanner({ sessionData, loading, credits, onGenera
               whiteSpace: 'nowrap',
             }}
           >
-            <span>Comprar este informe</span>
+            <span>Crear mi plan de acción</span>
             <span style={{ opacity: .7 }}>4,99 €</span>
           </button>
 

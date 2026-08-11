@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import DebateChat from './components/DebateChat.jsx'
 import DirectorModal from './components/DirectorModal.jsx'
 import DirectorsRoster from './components/DirectorsRoster.jsx'
@@ -46,11 +46,9 @@ export default function App() {
   const [reportCredits, setReportCredits] = useState(() => Number(localStorage.getItem(CREDITS_KEY) || 0))
   const [buyingReport, setBuyingReport] = useState(false)
   const [checkoutError, setCheckoutError] = useState(null)
-  const [sessionTier, setSessionTier] = useState(null) // 'free' | 'extra' | 'own-key' | null
   const [gateError, setGateError] = useState(null)
   const [gateChecking, setGateChecking] = useState(false)
   const [buyingExtra, setBuyingExtra] = useState(false)
-  const autoReportFiredRef = useRef(false)
 
   const addReportCredits = useCallback((n) => {
     setReportCredits(prev => {
@@ -187,26 +185,12 @@ export default function App() {
   const doneCount  = Object.values(directorStates).filter(s => s.status === 'done').length
   const totalCount = activeDirectors.length
 
-  // Sesiones gratis/extra (no BYOK): en cuanto llega el veredicto, se genera automáticamente
-  // la ampliación de 3 secciones — legible en pantalla, sin descarga, sin gastar un crédito.
-  // No se abre el modal solo (taparía el banner de compra del informe completo, que debe
-  // quedar visible siempre) — se abre con el botón flotante "Ver informe" una vez lista.
-  useEffect(() => {
-    if (!isDone || !verdict) return
-    if (sessionTier !== 'free' && sessionTier !== 'extra') return
-    if (verdict.startsWith('Error al generar el veredicto')) return
-    if (autoReportFiredRef.current) return
-    autoReportFiredRef.current = true
-    generateReport({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey: null, provider: 'claude', tier: 'free' })
-  }, [isDone, verdict, sessionTier, situation, meetingType, activeDirectors, directorStates, generateReport])
-
   const handleConvene = useCallback(async () => {
     const writtenSituation = situation.trim()
     const contextBrief = buildSituationBrief()
     if ((!writtenSituation && !contextBrief) || !isIdle || selectedIds.length === 0) return
     setGateError(null)
 
-    let tier = 'own-key'
     if (!apiKey) {
       setGateChecking(true)
       try {
@@ -221,15 +205,11 @@ export default function App() {
           setGateError(data.error || 'Sin análisis gratis hoy.')
           return
         }
-        tier = data.tier
       } catch {
         setGateChecking(false)
-        tier = 'free' // el mismo criterio "falla abierto" que el servidor, por si el propio fetch falla
       }
     }
 
-    setSessionTier(tier)
-    autoReportFiredRef.current = false
     const directors = orderForDebate(selectedIds, DIRECTORS)
     const effectiveSituation = writtenSituation || `Analiza el proyecto descrito en los documentos y fuentes de apoyo.\n\n${contextBrief}`
     await conveneBoard({ directors, situation: effectiveSituation, meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider })
@@ -261,7 +241,7 @@ export default function App() {
 
   const handleReset = () => {
     reset(); resetReport(); resetChat(); setShowReport(false); setSituation('')
-    setSessionTier(null); setGateError(null); autoReportFiredRef.current = false
+    setGateError(null)
   }
   const handleSaveKey = (provider, key) => {
     localStorage.setItem(STORAGE_KEY, key)
@@ -336,6 +316,10 @@ export default function App() {
               <p style={{ fontSize: '16px', color: 'var(--t2)', maxWidth: '480px', margin: '0 auto', lineHeight: 1.7 }}>
                 12 directores especializados debaten tu situación entre sí — se escuchan, se rebaten — y emiten un veredicto ejecutivo con próximos pasos.
               </p>
+            </div>
+
+            <div className="fade-up" style={{ marginBottom: '32px', animationDelay: '.04s' }}>
+              <DownloadBanner ready={false} />
             </div>
 
             {/* El elenco — pills seleccionables: quién participa en esta sesión */}
@@ -507,7 +491,6 @@ export default function App() {
             {isDone && verdict && (
               <div style={{ marginBottom: '28px' }}>
                 <DownloadBanner
-                  sessionData={{ directorCount: activeDirectors.length }}
                   loading={reportLoading}
                   credits={reportCredits}
                   onGenerate={handleGenerateReport}
