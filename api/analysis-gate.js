@@ -26,8 +26,11 @@ function todayUTC() {
 }
 
 async function kvCommand(path) {
-  const base = process.env.KV_REST_API_URL
-  const token = process.env.KV_REST_API_TOKEN
+  // Algunos flujos de aprovisionamiento de Vercel KV / Upstash exponen las credenciales
+  // bajo el nombre UPSTASH_REDIS_REST_* en vez de KV_REST_API_*. Aceptar ambos evita que
+  // una integración perfectamente válida deje la función creyendo que KV no está configurado.
+  const base = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN
   if (!base || !token) throw new Error('KV no configurado')
   const res = await fetch(`${base}${path}`, { headers: { Authorization: `Bearer ${token}` } })
   if (!res.ok) throw new Error(`KV error ${res.status}`)
@@ -52,20 +55,21 @@ async function checkAndConsume(ip) {
   const freeKey = `analysis:${ip}:${today}:free`
   const extraKey = `analysis:${ip}:${today}:extra`
 
+  // El propio INCR/DECR atómico de Upstash es la fuente de verdad, no una lectura previa:
+  // con GET+INCR en dos round trips separados, peticiones concurrentes de la misma IP pueden
+  // leer todas el mismo "aún no al límite" y colarse todas — con INCR como único paso de
+  // comprobación no hay ventana entre leer y escribir.
   try {
-    const freeUsed = await kvGetInt(freeKey)
-    if (freeUsed < FREE_DAILY_LIMIT) {
-      await kvIncr(freeKey)
-      await kvExpire(freeKey, KEY_TTL_SECONDS)
-      return { allowed: true, tier: 'free' }
-    }
-    const extraLeft = await kvGetInt(extraKey)
-    if (extraLeft > 0) {
-      await kvDecr(extraKey)
-      return { allowed: true, tier: 'extra' }
-    }
+    const used = await kvIncr(freeKey)
+    if (used === 1) await kvExpire(freeKey, KEY_TTL_SECONDS)
+    if (used <= FREE_DAILY_LIMIT) return { allowed: true, tier: 'free' }
+
+    const extraLeft = await kvDecr(extraKey)
+    if (extraLeft >= 0) return { allowed: true, tier: 'extra' }
+    await kvIncr(extraKey) // no había extra disponible: deshace el decremento para no dejar el contador negativo
     return { allowed: false }
-  } catch {
+  } catch (err) {
+    console.error('analysis-gate KV error:', err)
     // KV caído: no bloqueamos el uso gratuito por un problema de infraestructura.
     return { allowed: true, tier: 'free', degraded: true }
   }
@@ -84,17 +88,23 @@ async function grantExtra(ip, sessionId) {
     return { granted: false }
   }
 
+  // Se acredita ANTES de marcar como canjeada: si KV falla entre el crédito y la marca, en
+  // el peor caso una petición concurrente muy rara podría duplicar el crédito (ventana
+  // estrecha, se acepta), pero nunca se puede dar el caso de "marcado como canjeado sin
+  // haber acreditado nada" — que dejaría al usuario con el pago hecho y sin forma de reintentar,
+  // porque la marca bloquearía cualquier intento futuro.
   const grantKey = `grant:${sessionId}`
-  const firstClaim = await kvSetNX(grantKey, '1')
-  if (firstClaim !== 1) {
-    return { granted: false, alreadyGranted: true }
-  }
-  await kvExpire(grantKey, 7 * 24 * 60 * 60) // 7 días de margen, de sobra para cualquier reintento legítimo
+  const alreadyGranted = await kvGetInt(grantKey)
+  if (alreadyGranted) return { granted: false, alreadyGranted: true }
 
   const today = todayUTC()
   const extraKey = `analysis:${ip}:${today}:extra`
   await kvIncrBy(extraKey, 3)
   await kvExpire(extraKey, KEY_TTL_SECONDS)
+
+  await kvSetNX(grantKey, '1')
+  await kvExpire(grantKey, 7 * 24 * 60 * 60) // 7 días de margen, de sobra para cualquier reintento legítimo
+
   return { granted: true }
 }
 

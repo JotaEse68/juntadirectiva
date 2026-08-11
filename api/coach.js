@@ -1,10 +1,13 @@
 export const config = { runtime: 'edge' }
 
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000
-// El límite cuenta llamadas individuales, no sesiones. Una junta completa hace ~9 llamadas
-// (una por director + veredicto), más hasta 10 mensajes de seguimiento al Chairman — 30 cubre
-// una sesión completa con margen para el chat sin dejar el modo gratuito prácticamente inútil.
-const RATE_LIMIT_MAX = 30
+// El límite cuenta llamadas individuales, no sesiones. Un análisis completo hace ~14 llamadas
+// (8 directores + 1 veredicto + hasta 4 quickTakes de directores que no participaron + 1
+// generación de informe gratuito). Un usuario puede legítimamente encadenar hasta 5 análisis/día
+// en una sola sesión (2 gratis + 3 de "análisis extra" comprados), es decir ~70 llamadas, más
+// hasta 10 mensajes de seguimiento al Chairman — 100 cubre ese caso real sin dejar el modo
+// gratuito prácticamente inútil ni bloquear a mitad de un análisis ya pagado.
+const RATE_LIMIT_MAX = 100
 const ipStore = new Map()
 
 function getIP(req) {

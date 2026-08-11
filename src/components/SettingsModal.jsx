@@ -26,7 +26,7 @@ export default function SettingsModal({ onClose, onSave, currentProvider, curren
             <span style={{ fontSize:'14px',fontWeight:600,color:isFreeMode?'var(--blue)':'var(--t1)' }}>Modo gratuito</span>
             {isFreeMode&&<span style={{ fontSize:'10px',padding:'2px 7px',borderRadius:'4px',background:'var(--blue-dim)',color:'var(--blue)',fontWeight:700,border:'1px solid var(--blue-bd)' }}>ACTIVO</span>}
           </div>
-          <p style={{ fontSize:'12px',color:'var(--t3)',lineHeight:1.5 }}>3 reuniones por hora. Sin registro. El servidor aporta la API key (Claude).</p>
+          <p style={{ fontSize:'12px',color:'var(--t3)',lineHeight:1.5 }}>2 análisis/día. Sin registro. El servidor aporta la API key (Claude).</p>
         </div>
 
         <div style={{ padding:'16px',borderRadius:'var(--r-md)',border:`1px solid ${!isFreeMode?'var(--blue-bd)':'var(--bd)'}`,background:!isFreeMode?'var(--blue-dim)':'transparent',marginBottom:'24px' }}>

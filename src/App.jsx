@@ -21,6 +21,11 @@ const STORAGE_KEY = 'junta_api_key'
 const STORAGE_PROVIDER_KEY = 'junta_api_provider'
 const CREDITS_KEY = 'junta_report_credits'
 const MAX_CHARS = 800
+// Claves de sessionStorage para sobrevivir la navegación completa de página que hace el
+// redirect a Stripe Checkout — todo el estado de React se pierde en ese salto, así que lo
+// que haga falta para retomar la sesión al volver se guarda aquí justo antes de redirigir.
+const PENDING_REPORT_KEY = 'junta_pending_report_context'
+const PENDING_SITUATION_KEY = 'junta_pending_situation'
 
 export default function App() {
   const [situation, setSituation]   = useState('')
@@ -56,37 +61,76 @@ export default function App() {
   }, [])
 
   // Al volver de Stripe Checkout, confirma el pago server-side y desbloquea el informe.
+  // El checkout_session_id se mantiene en la URL mientras la verificación está en curso
+  // (valor informativo / permite reintentar a mano si algo falla) y solo se retira una vez
+  // se conoce el resultado — no antes.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const sessionId = params.get('checkout_session_id')
     if (!sessionId) return
-    window.history.replaceState({}, '', window.location.pathname)
-    fetch('/api/verify-checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId }),
-    })
-      .then(res => res.json())
-      .then(data => {
+
+    const clearUrl = () => window.history.replaceState({}, '', window.location.pathname)
+
+    ;(async () => {
+      try {
+        const res = await fetch('/api/verify-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        })
+        const data = await res.json()
         if (!data.paid) { setCheckoutError('El pago no se completó.'); return }
+
         if (data.product === 'extra') {
-          fetch('/api/analysis-gate', {
+          const grantRes = await fetch('/api/analysis-gate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'grant-extra', sessionId }),
           })
-            .then(res => res.json())
-            .then(grant => {
-              if (grant.granted) setGateError(null)
-              else setCheckoutError('El pago se confirmó pero no se pudo activar. Contacta soporte.')
-            })
-            .catch(() => setCheckoutError('El pago se confirmó pero no se pudo activar. Contacta soporte.'))
+          const grant = await grantRes.json()
+          // alreadyGranted (replay de una sesión ya canjeada) no es un error: el usuario ya
+          // tiene su crédito de una carga anterior de esta misma pantalla — no hace falta
+          // asustarle con un mensaje de soporte.
+          if (grant.granted || grant.alreadyGranted) {
+            setGateError(null)
+            try {
+              const raw = sessionStorage.getItem(PENDING_SITUATION_KEY)
+              if (raw) {
+                const parsed = JSON.parse(raw)
+                if (parsed.situation != null) setSituation(parsed.situation)
+                if (parsed.meetingType) setMeetingType(parsed.meetingType)
+                if (parsed.selectedIds) setSelectedIds(parsed.selectedIds)
+              }
+            } catch {}
+            sessionStorage.removeItem(PENDING_SITUATION_KEY)
+          } else {
+            setCheckoutError('El pago se confirmó pero no se pudo activar. Contacta soporte.')
+          }
         } else {
           addReportCredits(data.product === 'bundle' ? 3 : 1)
+          // Si esta compra viene del CTA de "informe completo" dentro de un debate ya
+          // terminado, retoma ese contexto y gasta el crédito recién añadido de inmediato
+          // sobre el análisis para el que se compró, en vez de dejar al usuario en la
+          // pantalla inicial con un crédito sin usar.
+          try {
+            const raw = sessionStorage.getItem(PENDING_REPORT_KEY)
+            if (raw) {
+              const parsed = JSON.parse(raw)
+              if (parsed.situation != null) setSituation(parsed.situation)
+              addReportCredits(-1)
+              setShowReport(true)
+              generateReport({ ...parsed, apiKey: null, provider: 'claude', tier: 'paid' })
+            }
+          } catch {}
+          sessionStorage.removeItem(PENDING_REPORT_KEY)
         }
-      })
-      .catch(() => setCheckoutError('No se pudo verificar el pago.'))
-  }, [addReportCredits])
+      } catch {
+        setCheckoutError('No se pudo verificar el pago.')
+      } finally {
+        clearUrl()
+      }
+    })()
+  }, [addReportCredits, generateReport])
 
   const consensus = useMemo(() => computeConsensus(directorStates), [directorStates])
 
@@ -108,6 +152,14 @@ export default function App() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error creando el pago')
+      // El redirect a Stripe es una navegación completa: se pierde todo el estado de React.
+      // Si ya hay un debate terminado, se guarda para poder retomarlo y gastar el crédito
+      // recién comprado sobre él en cuanto se vuelva (ver el efecto de checkout_session_id).
+      if (isDone && verdict) {
+        try {
+          sessionStorage.setItem(PENDING_REPORT_KEY, JSON.stringify({ situation, meetingType, activeDirectors, directorStates, verdict }))
+        } catch {}
+      }
       window.location.href = data.url
     } catch (err) {
       setCheckoutError(err.message)
@@ -140,6 +192,7 @@ export default function App() {
   useEffect(() => {
     if (!isDone || !verdict) return
     if (sessionTier !== 'free' && sessionTier !== 'extra') return
+    if (verdict.startsWith('Error al generar el veredicto')) return
     if (autoReportFiredRef.current) return
     autoReportFiredRef.current = true
     setShowReport(true)
@@ -189,6 +242,12 @@ export default function App() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error creando el pago')
+      // Igual que en handleBuyReport: se pierde el estado de React en el redirect. Aquí no
+      // hay debate que retomar, pero al menos se evita que el usuario tenga que reescribir
+      // lo que ya había tecleado.
+      try {
+        sessionStorage.setItem(PENDING_SITUATION_KEY, JSON.stringify({ situation, meetingType, selectedIds }))
+      } catch {}
       window.location.href = data.url
     } catch (err) {
       setCheckoutError(err.message)
@@ -453,6 +512,11 @@ export default function App() {
                 />
                 {checkoutError && (
                   <p style={{ fontSize: '12px', color: 'var(--red)', marginTop: '10px' }}>⚠️ {checkoutError}</p>
+                )}
+                {report && report.locked && !showReport && (
+                  <button onClick={() => setShowReport(true)} style={{ fontSize: '12px', color: 'var(--blue)', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', marginTop: '8px' }}>
+                    Ver ampliación gratuita
+                  </button>
                 )}
               </div>
             )}

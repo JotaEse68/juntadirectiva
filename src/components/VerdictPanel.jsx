@@ -3,10 +3,13 @@ import React from 'react'
 function detectVerdict(text) {
   if (!text) return null
   const lo = text.toLowerCase()
-  if (lo.includes('no proceder') || lo.includes('parar') || lo.includes('no recomiendo') || lo.includes('no proceder'))
-    return { label: 'No proceder', color: 'var(--red)', icon: '✗' }
-  if (lo.includes('proceder con condiciones') || lo.includes('con condiciones') || lo.includes('sí, pero') || lo.includes('si, pero'))
-    return { label: 'Proceder con condiciones', color: 'var(--blue-lt)', icon: '⚡' }
+  // Orden importante: los patrones más específicos van primero porque "proceder así..."
+  // también contiene la subcadena "proceder" y haría match con el caso llano si se
+  // comprobara antes.
+  if (lo.includes('replantear') || lo.includes('no proceder') || lo.includes('parar') || lo.includes('no recomiendo'))
+    return { label: 'Replantear', color: 'var(--red)', icon: '✗' }
+  if (lo.includes('proceder así') || lo.includes('proceder asi') || lo.includes('con condiciones') || lo.includes('con ajustes') || lo.includes('sí, pero') || lo.includes('si, pero'))
+    return { label: 'Proceder con ajustes', color: 'var(--blue-lt)', icon: '⚡' }
   if (lo.includes('proceder') || lo.includes('adelante') || lo.includes('apruebo') || lo.includes('recomiendo'))
     return { label: 'Proceder', color: 'var(--blue)', icon: '✓' }
   return null
@@ -15,10 +18,14 @@ function detectVerdict(text) {
 function ConsensusBar({ consensus }) {
   if (!consensus || consensus.total === 0) return null
   const { favor, contra, mixto, sinDato, total } = consensus
+  // 'contra' es la salida interna del clasificador para "convicción condicionada a X" — una
+  // recomendación constructiva con condiciones, no una oposición. Los directores ya no votan
+  // a favor/en contra de un plan único, así que se muestra en ámbar como "condicionada",
+  // nunca en rojo como si fuera un voto negativo.
   const segments = [
     { key: 'favor', value: favor, color: 'var(--blue)', label: 'a favor' },
     { key: 'mixto', value: mixto, color: '#f5a623', label: 'con matices' },
-    { key: 'contra', value: contra, color: 'var(--red)', label: 'en contra' },
+    { key: 'contra', value: contra, color: '#e08a1e', label: 'condicionada' },
     { key: 'sinDato', value: sinDato, color: 'var(--bd)', label: 'sin postura clara' },
   ].filter(s => s.value > 0)
 

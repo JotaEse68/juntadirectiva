@@ -1,9 +1,11 @@
 import React from 'react'
 import { classifyVote } from '../lib/consensus.js'
 
+// 'contra' es la salida interna del clasificador para "convicción condicionada a X" — una
+// recomendación constructiva con condiciones, no una oposición (ver src/lib/consensus.js).
 const VOTE_BADGE = {
   favor:  { icon: '✓', label: 'A favor' },
-  contra: { icon: '✗', label: 'En contra' },
+  contra: { icon: '⚡', label: 'Condicionada' },
   mixto:  { icon: '~', label: 'Con matices' },
 }
 

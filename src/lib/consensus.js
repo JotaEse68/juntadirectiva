@@ -13,12 +13,19 @@ function extractTail(text) {
   return lines.slice(-2).join(' ').toLowerCase()
 }
 
+// Tolerante a la puntuación que el modelo pueda calcar del propio prompt ("convicción: alta",
+// "conviccion - media", "convicción — condicionada"), no solo al formato sin puntuación.
+const CONVICCION_RE = /convicci[oó]n\s*[:—-]?\s*(alta|media|condicionada)/i
+
 export function classifyVote(directorId, text) {
   const tail = extractTail(text)
   if (!tail) return null
-  if (tail.includes('conviccion condicionada') || tail.includes('convicción condicionada')) return 'contra'
-  if (tail.includes('conviccion media') || tail.includes('convicción media')) return 'mixto'
-  if (tail.includes('conviccion alta') || tail.includes('convicción alta')) return 'favor'
+  const match = tail.match(CONVICCION_RE)
+  if (!match) return null
+  const nivel = match[1]
+  if (nivel === 'condicionada') return 'contra'
+  if (nivel === 'media') return 'mixto'
+  if (nivel === 'alta') return 'favor'
   return null
 }
 
