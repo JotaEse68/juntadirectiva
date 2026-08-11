@@ -307,6 +307,9 @@ export default function App() {
           <>
             {/* Hero */}
             <div className="fade-up" style={{ textAlign: 'center', marginBottom: '52px' }}>
+              <div style={{ marginBottom: '30px', textAlign: 'left' }}>
+                <DownloadBanner ready={false} />
+              </div>
               <p style={{ fontSize: '11px', color: 'var(--blue)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: '16px', fontWeight: 500 }}>
                 Tu junta directiva · 12 expertos
               </p>
@@ -316,10 +319,6 @@ export default function App() {
               <p style={{ fontSize: '16px', color: 'var(--t2)', maxWidth: '480px', margin: '0 auto', lineHeight: 1.7 }}>
                 Las grandes empresas no deciden a ciegas: se rodean de una junta que cuestiona, contrasta y exige claridad. Ahora tú también. Convoca a 12 especialistas para convertir una decisión difícil en una dirección clara.
               </p>
-            </div>
-
-            <div className="fade-up" style={{ marginBottom: '32px', animationDelay: '.04s' }}>
-              <DownloadBanner ready={false} />
             </div>
 
             {/* El elenco — pills seleccionables: quién participa en esta sesión */}

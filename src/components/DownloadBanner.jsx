@@ -9,6 +9,7 @@ export default function DownloadBanner({ ready = true, loading, credits, onGener
       borderBottom: '1px solid var(--bd)',
       padding: '24px 2px',
       display: 'flex',
+      textAlign: 'left',
       alignItems: 'center',
       gap: '28px',
       flexWrap: 'wrap',
