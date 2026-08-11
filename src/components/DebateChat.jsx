@@ -36,7 +36,7 @@ function Bubble({ director, state, onClick }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '5px', flexWrap: 'wrap' }}>
           <button onClick={onClick} style={{ fontSize: '13px', fontWeight: 700, color }}>{director.name}</button>
-          <span style={{ fontSize: '11px', color: 'var(--t3)' }}>{director.title}</span>
+          <span style={{ fontSize: '11px', color: 'var(--t3)' }}>Especialidad · {director.tags[0]}</span>
           {isStreaming && <span style={{ fontSize: '11px', color, opacity: .8 }}>escribiendo…</span>}
         </div>
 

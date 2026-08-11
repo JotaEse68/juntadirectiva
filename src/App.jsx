@@ -14,7 +14,6 @@ import { useReport } from './hooks/useReport.js'
 import { useChairmanChat } from './hooks/useChairmanChat.js'
 import ContextPanel from './components/ContextPanel.jsx'
 import { DIRECTORS, MEETING_TYPES, selectDirectorsForMeeting, orderForDebate } from './lib/directors.js'
-import { PROVIDERS } from './lib/providers.js'
 import { computeConsensus } from './lib/consensus.js'
 
 const STORAGE_KEY = 'junta_api_key'
@@ -35,6 +34,7 @@ export default function App() {
   const [apiProvider, setApiProvider] = useState(() => localStorage.getItem(STORAGE_PROVIDER_KEY) || 'claude')
   const [showSettings, setShowSettings] = useState(false)
   const [selectedDirector, setSelectedDirector] = useState(null)
+  const [showBoardCustomization, setShowBoardCustomization] = useState(false)
 
   const { conveneBoard, reset, pause, resume, directorStates, verdict, verdictLoading, phase, activeDirectors, globalError, isPaused } = useBoard()
   const { items: ctxItems, addNote, processFile, processURL, removeItem: removeCtxItem,
@@ -294,7 +294,7 @@ export default function App() {
             </button>
           )}
           <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '20px', border: `1px solid ${apiKey ? 'var(--blue-bd)' : 'var(--bd)'}`, color: apiKey ? 'var(--blue)' : 'var(--t3)', background: apiKey ? 'var(--blue-dim)' : 'transparent' }}>
-            {apiKey ? `${PROVIDERS[apiProvider]?.emoji || '🔑'} ${PROVIDERS[apiProvider]?.label || 'key propia'}` : '🌐 2/día'}
+            {apiKey ? '🔑 API propia activa' : '🌐 2 análisis/día'}
           </span>
           <button onClick={() => setShowSettings(true)} style={{ padding: '6px 10px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t3)', fontSize: '13px' }}>⚙️</button>
         </div>
@@ -304,9 +304,9 @@ export default function App() {
 
         {/* ── PANTALLA INICIAL ── */}
         {isIdle && (
-          <>
+          <div className="home-flow">
             {/* Hero */}
-            <div className="fade-up" style={{ textAlign: 'center', marginBottom: '52px' }}>
+            <div className="fade-up home-hero" style={{ textAlign: 'center', marginBottom: '36px' }}>
               <div style={{ marginBottom: '30px', textAlign: 'left' }}>
                 <DownloadBanner ready={false} />
               </div>
@@ -322,7 +322,20 @@ export default function App() {
             </div>
 
             {/* El elenco — pills seleccionables: quién participa en esta sesión */}
-            <div className="fade-up" style={{ marginBottom: '48px', animationDelay: '.08s' }}>
+            <div className="fade-up board-customization" style={{ marginBottom: '48px', animationDelay: '.08s' }}>
+              <button
+                type="button"
+                onClick={() => setShowBoardCustomization(open => !open)}
+                aria-expanded={showBoardCustomization}
+                style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: '16px', padding: '16px 18px', borderRadius: 'var(--r-md)', border: '1px solid var(--bd)', color: 'var(--t2)', background: 'var(--bg2)', textAlign: 'left' }}
+              >
+                <span>
+                  <strong style={{ display: 'block', color: 'var(--t1)', fontSize: '13px', marginBottom: '2px' }}>Junta recomendada para esta reunión · {selectedIds.length} especialistas</strong>
+                  <span style={{ fontSize: '12px' }}>La elegimos por ti según el reto. Personalízala solo si quieres otra perspectiva.</span>
+                </span>
+                <span style={{ color: 'var(--blue)', fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap' }}>{showBoardCustomization ? 'Cerrar' : 'Personalizar'} {showBoardCustomization ? '↑' : '↓'}</span>
+              </button>
+              {showBoardCustomization && <div style={{ marginTop: '16px' }}>
               <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '14px', textAlign: 'center', fontWeight: 500 }}>
                 Elige quién participa · {selectedIds.length} de {DIRECTORS.length} directores
               </p>
@@ -362,11 +375,12 @@ export default function App() {
                   El debate es secuencial (cada director escucha a los anteriores) — con {selectedIds.length} directores puede tardar varios minutos.
                 </p>
               )}
+              </div>}
             </div>
 
             {/* Formulario */}
-            <div className="fade-up" style={{ animationDelay: '.14s', background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 'var(--r-xl)', padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div>
+            <div className="fade-up composer-card" style={{ animationDelay: '.14s', background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 'var(--r-xl)', padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div className="meeting-type">
                 <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '12px', fontWeight: 500 }}>Tipo de reunión</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px' }}>
                   {MEETING_TYPES.map(mt => (
@@ -380,8 +394,8 @@ export default function App() {
                 </div>
               </div>
 
-              <div>
-                <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '10px', fontWeight: 500 }}>Situación a debatir</p>
+              <div className="situation-field">
+                <p style={{ fontSize: '11px', color: 'var(--blue)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '10px', fontWeight: 700 }}>¿Qué decisión necesitas tomar?</p>
                 <textarea
                   value={situation}
                   onChange={e => setSituation(e.target.value.slice(0, MAX_CHARS))}
@@ -396,10 +410,22 @@ export default function App() {
                   <span style={{ fontSize: '11px', color: 'var(--t3)' }}>⌘+Enter para convocar</span>
                   <span style={{ fontSize: '11px', color: 'var(--t3)' }}>{situation.length}/{MAX_CHARS}</span>
                 </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px', marginTop: '12px' }}>
+                  {[
+                    '¿Contratar o externalizar esta función?',
+                    '¿Lanzar esta oferta ahora?',
+                    '¿Invertir en este proyecto?',
+                    '¿Cómo salimos de esta crisis?',
+                  ].map(example => (
+                    <button key={example} type="button" onClick={() => setSituation(example)} style={{ padding: '6px 10px', border: '1px solid var(--bd)', borderRadius: '20px', color: 'var(--t2)', background: 'var(--bg3)', fontSize: '11px', textAlign: 'left' }}>
+                      {example}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Panel de contexto enriquecido */}
-              <div>
+              <div className="context-field">
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
                   <p style={{ fontSize:'11px', color:'var(--t3)', letterSpacing:'.08em', textTransform:'uppercase', fontWeight:500 }}>
                     Contexto adicional
@@ -441,7 +467,7 @@ export default function App() {
               </p>
             </div>
 
-          </>
+          </div>
         )}
 
         {/* ── DEBATE / RESULTADOS ── */}

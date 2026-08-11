@@ -44,7 +44,7 @@ export default function DirectorModal({ director, sessionVote, onClose }) {
           {director.name}
         </p>
         <p style={{ fontSize: '13px', color: 'var(--t2)', textAlign: 'center', marginBottom: '18px' }}>
-          {director.title}
+          Especialidad · {director.tags[0]}
         </p>
 
         {/* Tags */}

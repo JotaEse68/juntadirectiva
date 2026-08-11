@@ -37,9 +37,21 @@ export default function DownloadBanner({ ready = true, loading, credits, onGener
         <div style={{ paddingLeft: '12px', borderLeft: '2px solid var(--blue)' }}>
           <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.08em', fontWeight: 700, marginBottom: '4px' }}>02 · EJECUTAR</p>
           <p style={{ fontSize: '12px', color: 'var(--t1)', lineHeight: 1.45 }}>30/60/90 días, responsables, KPIs, riesgos y contingencias.</p>
-          <p style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '5px' }}>Plan de acción</p>
+          <p style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '5px' }}>{ready ? 'Plan de acción' : 'Plan completo desde 4,99 €'}</p>
         </div>
       </div>
+
+      {ready && !hasCredits && (
+        <div style={{ width: '100%', padding: '14px 16px', borderRadius: 'var(--r-md)', background: 'var(--bg3)', border: '1px solid var(--bd)' }}>
+          <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: '9px' }}>Vista previa del plan operativo</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', color: 'var(--t2)', fontSize: '12px' }}>
+            <span>01 · Prioridades de 30 días</span>
+            <span>02 · Responsables y esfuerzo</span>
+            <span>03 · KPIs y contingencias</span>
+          </div>
+          <p style={{ fontSize: '11px', color: 'var(--t3)', marginTop: '9px' }}>Desbloquéalo para convertir el veredicto en una hoja de ruta descargable.</p>
+        </div>
+      )}
 
       {hasCredits && (
         <p style={{ width: '100%', fontSize: '11px', color: 'var(--blue)', marginTop: '-12px' }}>
