@@ -513,11 +513,6 @@ export default function App() {
                 {checkoutError && (
                   <p style={{ fontSize: '12px', color: 'var(--red)', marginTop: '10px' }}>⚠️ {checkoutError}</p>
                 )}
-                {report && report.locked && !showReport && (
-                  <button onClick={() => setShowReport(true)} style={{ fontSize: '12px', color: 'var(--blue)', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', marginTop: '8px' }}>
-                    Ver ampliación gratuita
-                  </button>
-                )}
               </div>
             )}
 
@@ -550,6 +545,25 @@ export default function App() {
           <p style={{ fontSize: '11px', color: 'var(--t3)' }}>Junta Directiva AI · 12 expertos · Powered by Claude, OpenAI o Gemini · 2026</p>
         </footer>
       </main>
+
+      {/* Reabrir el informe ya generado — top-level e independiente de isDone/verdict/phase
+          para que también funcione tras un reload (p.ej. al volver de Stripe con un informe
+          de pago recién restaurado desde sessionStorage), no solo dentro de una sesión de
+          debate activa. */}
+      {report && !showReport && (
+        <button
+          onClick={() => setShowReport(true)}
+          style={{
+            position: 'fixed', bottom: '20px', right: '20px', zIndex: 90,
+            padding: '10px 18px', borderRadius: '24px',
+            background: 'var(--blue-dim)', border: '1px solid var(--blue-bd)',
+            color: 'var(--blue)', fontSize: '12px', fontWeight: 600,
+            cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+          }}
+        >
+          📄 {report.locked ? 'Ver ampliación gratuita' : 'Ver informe'}
+        </button>
+      )}
 
       {/* Modals */}
       {showReport && (
