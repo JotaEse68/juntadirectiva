@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react'
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import DebateChat from './components/DebateChat.jsx'
 import DirectorModal from './components/DirectorModal.jsx'
 import DirectorsRoster from './components/DirectorsRoster.jsx'
 import VerdictPanel from './components/VerdictPanel.jsx'
 import DownloadBanner from './components/DownloadBanner.jsx'
+import DailyLimitBanner from './components/DailyLimitBanner.jsx'
 import ReportModal from './components/ReportModal.jsx'
 import ChairmanChat from './components/ChairmanChat.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
@@ -40,6 +41,11 @@ export default function App() {
   const [reportCredits, setReportCredits] = useState(() => Number(localStorage.getItem(CREDITS_KEY) || 0))
   const [buyingReport, setBuyingReport] = useState(false)
   const [checkoutError, setCheckoutError] = useState(null)
+  const [sessionTier, setSessionTier] = useState(null) // 'free' | 'extra' | 'own-key' | null
+  const [gateError, setGateError] = useState(null)
+  const [gateChecking, setGateChecking] = useState(false)
+  const [buyingExtra, setBuyingExtra] = useState(false)
+  const autoReportFiredRef = useRef(false)
 
   const addReportCredits = useCallback((n) => {
     setReportCredits(prev => {
@@ -62,8 +68,22 @@ export default function App() {
     })
       .then(res => res.json())
       .then(data => {
-        if (data.paid) addReportCredits(data.product === 'bundle' ? 3 : 1)
-        else setCheckoutError('El pago no se completó.')
+        if (!data.paid) { setCheckoutError('El pago no se completó.'); return }
+        if (data.product === 'extra') {
+          fetch('/api/analysis-gate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'grant-extra', sessionId }),
+          })
+            .then(res => res.json())
+            .then(grant => {
+              if (grant.granted) setGateError(null)
+              else setCheckoutError('El pago se confirmó pero no se pudo activar. Contacta soporte.')
+            })
+            .catch(() => setCheckoutError('El pago se confirmó pero no se pudo activar. Contacta soporte.'))
+        } else {
+          addReportCredits(data.product === 'bundle' ? 3 : 1)
+        }
       })
       .catch(() => setCheckoutError('No se pudo verificar el pago.'))
   }, [addReportCredits])
@@ -115,13 +135,71 @@ export default function App() {
   const doneCount  = Object.values(directorStates).filter(s => s.status === 'done').length
   const totalCount = activeDirectors.length
 
+  // Sesiones gratis/extra (no BYOK): en cuanto llega el veredicto, se genera automáticamente
+  // la ampliación de 3 secciones — legible en pantalla, sin descarga, sin gastar un crédito.
+  useEffect(() => {
+    if (!isDone || !verdict) return
+    if (sessionTier !== 'free' && sessionTier !== 'extra') return
+    if (autoReportFiredRef.current) return
+    autoReportFiredRef.current = true
+    setShowReport(true)
+    generateReport({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey: null, provider: 'claude', tier: 'free' })
+  }, [isDone, verdict, sessionTier, situation, meetingType, activeDirectors, directorStates, generateReport])
+
   const handleConvene = useCallback(async () => {
     if (!situation.trim() || !isIdle || selectedIds.length === 0) return
+    setGateError(null)
+
+    let tier = 'own-key'
+    if (!apiKey) {
+      setGateChecking(true)
+      try {
+        const res = await fetch('/api/analysis-gate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'check' }),
+        })
+        const data = await res.json()
+        setGateChecking(false)
+        if (!res.ok || !data.allowed) {
+          setGateError(data.error || 'Sin análisis gratis hoy.')
+          return
+        }
+        tier = data.tier
+      } catch {
+        setGateChecking(false)
+        tier = 'free' // el mismo criterio "falla abierto" que el servidor, por si el propio fetch falla
+      }
+    }
+
+    setSessionTier(tier)
+    autoReportFiredRef.current = false
     const directors = orderForDebate(selectedIds, DIRECTORS)
     await conveneBoard({ directors, situation: situation.trim(), meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider })
   }, [situation, meetingType, selectedIds, apiKey, apiProvider, isIdle, conveneBoard])
 
-  const handleReset = () => { reset(); resetReport(); resetChat(); setShowReport(false); setSituation('') }
+  const handleBuyExtra = async () => {
+    setCheckoutError(null)
+    setBuyingExtra(true)
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product: 'extra' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error creando el pago')
+      window.location.href = data.url
+    } catch (err) {
+      setCheckoutError(err.message)
+      setBuyingExtra(false)
+    }
+  }
+
+  const handleReset = () => {
+    reset(); resetReport(); resetChat(); setShowReport(false); setSituation('')
+    setSessionTier(null); setGateError(null); autoReportFiredRef.current = false
+  }
   const handleSaveKey = (provider, key) => {
     localStorage.setItem(STORAGE_KEY, key)
     localStorage.setItem(STORAGE_PROVIDER_KEY, key ? provider : 'claude')
@@ -173,7 +251,7 @@ export default function App() {
             </button>
           )}
           <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '20px', border: `1px solid ${apiKey ? 'var(--blue-bd)' : 'var(--bd)'}`, color: apiKey ? 'var(--blue)' : 'var(--t3)', background: apiKey ? 'var(--blue-dim)' : 'transparent' }}>
-            {apiKey ? `${PROVIDERS[apiProvider]?.emoji || '🔑'} ${PROVIDERS[apiProvider]?.label || 'key propia'}` : '🌐 3/hora'}
+            {apiKey ? `${PROVIDERS[apiProvider]?.emoji || '🔑'} ${PROVIDERS[apiProvider]?.label || 'key propia'}` : '🌐 2/día'}
           </span>
           <button onClick={() => setShowSettings(true)} style={{ padding: '6px 10px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t3)', fontSize: '13px' }}>⚙️</button>
         </div>
@@ -301,14 +379,18 @@ export default function App() {
 
               <button
                 onClick={handleConvene}
-                disabled={!situation.trim() || ctxProcessing || selectedIds.length === 0}
+                disabled={!situation.trim() || ctxProcessing || gateChecking || selectedIds.length === 0}
                 style={{ padding: '17px', borderRadius: 'var(--r-md)', border: 'none', background: (situation.trim() && selectedIds.length > 0) ? 'var(--blue)' : 'var(--bg3)', color: (situation.trim() && selectedIds.length > 0) ? 'var(--bg0)' : 'var(--t3)', fontSize: '15px', fontWeight: 700, cursor: (situation.trim() && selectedIds.length > 0) ? 'pointer' : 'not-allowed', transition: 'all .2s', letterSpacing: '.02em' }}
               >
-                {selectedIds.length === 0 ? '⚠️ Elige al menos un director' : '🏛️ Convocar la junta'}
+                {selectedIds.length === 0 ? '⚠️ Elige al menos un director' : gateChecking ? 'Comprobando disponibilidad...' : '🏛️ Convocar la junta'}
               </button>
 
+              {gateError && (
+                <DailyLimitBanner error={gateError} onBuyExtra={handleBuyExtra} buying={buyingExtra} />
+              )}
+
               <p style={{ fontSize: '12px', color: 'var(--t3)', textAlign: 'center' }}>
-                {apiKey ? '🔑 Tu API key · reuniones ilimitadas' : '🌐 Modo gratuito · 3 reuniones/hora'} ·{' '}
+                {apiKey ? '🔑 Tu API key · reuniones ilimitadas' : '🌐 Modo gratuito · 2 análisis/día'} ·{' '}
                 <button onClick={() => setShowSettings(true)} style={{ color: 'var(--blue)', fontSize: '12px', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>cambiar</button>
               </p>
             </div>
@@ -414,6 +496,8 @@ export default function App() {
           loading={reportLoading}
           error={reportError}
           onClose={() => setShowReport(false)}
+          onUpgrade={() => handleBuyReport('single')}
+          upgrading={buyingReport}
         />
       )}
       {showSettings && <SettingsModal currentProvider={apiProvider} currentKey={apiKey} onSave={handleSaveKey} onClose={() => setShowSettings(false)} />}
