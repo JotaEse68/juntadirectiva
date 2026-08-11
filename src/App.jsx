@@ -318,6 +318,10 @@ export default function App() {
               </p>
             </div>
 
+            <div className="fade-up" style={{ marginBottom: '32px', animationDelay: '.04s' }}>
+              <DownloadBanner ready={false} />
+            </div>
+
             {/* El elenco — pills seleccionables: quién participa en esta sesión */}
             <div className="fade-up" style={{ marginBottom: '48px', animationDelay: '.08s' }}>
               <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '14px', textAlign: 'center', fontWeight: 500 }}>
@@ -348,7 +352,7 @@ export default function App() {
                     >
                       <span>{d.emoji}</span>
                       <span>{d.name}</span>
-                      <span style={{ fontWeight: 400, opacity: .6, fontSize: '11px' }}>· {d.title.split(' ').slice(-1)[0]}</span>
+                      <span style={{ fontWeight: 400, opacity: .7, fontSize: '11px' }}>· {d.tags[0]}</span>
                       {!isOn && <span style={{ fontSize: '11px' }}>✕</span>}
                     </button>
                   )
@@ -438,9 +442,6 @@ export default function App() {
               </p>
             </div>
 
-            <div className="fade-up" style={{ marginTop: '28px', animationDelay: '.2s' }}>
-              <DownloadBanner ready={false} />
-            </div>
           </>
         )}
 
