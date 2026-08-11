@@ -38,7 +38,7 @@ export default function App() {
 
   const { conveneBoard, reset, pause, resume, directorStates, verdict, verdictLoading, phase, activeDirectors, globalError, isPaused } = useBoard()
   const { items: ctxItems, addNote, processFile, processURL, removeItem: removeCtxItem,
-          buildContextBlock, hasContext, isProcessing: ctxProcessing } = useContextBuilder()
+          buildContextBlock, buildSituationBrief, hasContext, isProcessing: ctxProcessing } = useContextBuilder()
   const { report, loading: reportLoading, error: reportError, generateReport, reset: resetReport } = useReport()
   const [showReport, setShowReport] = useState(false)
   const { messages: chatMessages, sending: chatSending, error: chatError, freeMessagesUsed, sendMessage: sendChatMessage, reset: resetChat } = useChairmanChat()
@@ -201,7 +201,9 @@ export default function App() {
   }, [isDone, verdict, sessionTier, situation, meetingType, activeDirectors, directorStates, generateReport])
 
   const handleConvene = useCallback(async () => {
-    if (!situation.trim() || !isIdle || selectedIds.length === 0) return
+    const writtenSituation = situation.trim()
+    const contextBrief = buildSituationBrief()
+    if ((!writtenSituation && !contextBrief) || !isIdle || selectedIds.length === 0) return
     setGateError(null)
 
     let tier = 'own-key'
@@ -229,8 +231,9 @@ export default function App() {
     setSessionTier(tier)
     autoReportFiredRef.current = false
     const directors = orderForDebate(selectedIds, DIRECTORS)
-    await conveneBoard({ directors, situation: situation.trim(), meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider })
-  }, [situation, meetingType, selectedIds, apiKey, apiProvider, isIdle, conveneBoard])
+    const effectiveSituation = writtenSituation || `Analiza el proyecto descrito en los documentos y fuentes de apoyo.\n\n${contextBrief}`
+    await conveneBoard({ directors, situation: effectiveSituation, meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider })
+  }, [situation, meetingType, selectedIds, apiKey, apiProvider, isIdle, conveneBoard, buildContextBlock, buildSituationBrief])
 
   const handleBuyExtra = async () => {
     setCheckoutError(null)
@@ -399,7 +402,7 @@ export default function App() {
                 <textarea
                   value={situation}
                   onChange={e => setSituation(e.target.value.slice(0, MAX_CHARS))}
-                  placeholder="Describe la situación con contexto. Cuánto más específico seas, más útil será el análisis. Incluye datos relevantes: mercado, recursos, restricciones, plazos..."
+                  placeholder="Describe la situación con contexto, o adjunta un documento de apoyo debajo. Cuánto más específico seas, más útil será el análisis."
                   rows={5}
                   style={{ width: '100%', padding: '16px', background: 'var(--bg3)', border: '1px solid var(--bd)', borderRadius: 'var(--r-md)', color: 'var(--t1)', fontSize: '15px', lineHeight: 1.7, resize: 'vertical', outline: 'none', transition: 'border-color .2s', minHeight: '130px' }}
                   onFocus={e => e.target.style.borderColor = 'var(--blue-bd)'}
@@ -439,8 +442,8 @@ export default function App() {
 
               <button
                 onClick={handleConvene}
-                disabled={!situation.trim() || ctxProcessing || gateChecking || selectedIds.length === 0}
-                style={{ padding: '17px', borderRadius: 'var(--r-md)', border: 'none', background: (situation.trim() && selectedIds.length > 0) ? 'var(--blue)' : 'var(--bg3)', color: (situation.trim() && selectedIds.length > 0) ? 'var(--bg0)' : 'var(--t3)', fontSize: '15px', fontWeight: 700, cursor: (situation.trim() && selectedIds.length > 0) ? 'pointer' : 'not-allowed', transition: 'all .2s', letterSpacing: '.02em' }}
+                disabled={(!situation.trim() && !hasContext) || ctxProcessing || gateChecking || selectedIds.length === 0}
+                style={{ padding: '17px', borderRadius: 'var(--r-md)', border: 'none', background: ((situation.trim() || hasContext) && selectedIds.length > 0) ? 'var(--blue)' : 'var(--bg3)', color: ((situation.trim() || hasContext) && selectedIds.length > 0) ? 'var(--bg0)' : 'var(--t3)', fontSize: '15px', fontWeight: 700, cursor: ((situation.trim() || hasContext) && selectedIds.length > 0) ? 'pointer' : 'not-allowed', transition: 'all .2s', letterSpacing: '.02em' }}
               >
                 {selectedIds.length === 0 ? '⚠️ Elige al menos un director' : gateChecking ? 'Comprobando disponibilidad...' : '🏛️ Convocar la junta'}
               </button>

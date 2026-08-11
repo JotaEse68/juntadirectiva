@@ -20,7 +20,10 @@ export default function DownloadBanner({ sessionData, loading, credits, onGenera
           <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--t1)' }}>Informe completo</p>
         </div>
         <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.5 }}>
-          Va más allá del veredicto: opinión de los 12 directores (los {sessionData?.directorCount || 8} que debatieron + el resto en exprés), ideas adicionales, recursos recomendados y un plan de mejora detallado.
+          <strong style={{ color: 'var(--t1)' }}>Ya incluido gratis:</strong> veredicto ejecutivo, resumen ampliado, ideas adicionales, recursos recomendados y opinión exprés de los 12 directores.
+        </p>
+        <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.5, marginTop: '5px' }}>
+          <strong style={{ color: 'var(--blue)' }}>El informe de pago añade:</strong> un plan de mejora de 6–8 pasos priorizados con esfuerzo estimado y la descarga del informe completo.
         </p>
         {hasCredits && (
           <p style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '6px' }}>
@@ -63,7 +66,7 @@ export default function DownloadBanner({ sessionData, loading, credits, onGenera
               whiteSpace: 'nowrap',
             }}
           >
-            <span>Bundle 3 informes</span>
+            <span>Comprar 3 informes</span>
             <span style={{ fontWeight: 400, opacity: .8 }}>9,99 €</span>
           </button>
 
@@ -83,7 +86,7 @@ export default function DownloadBanner({ sessionData, loading, credits, onGenera
               whiteSpace: 'nowrap',
             }}
           >
-            <span>Este informe</span>
+            <span>Comprar este informe</span>
             <span style={{ opacity: .7 }}>4,99 €</span>
           </button>
 

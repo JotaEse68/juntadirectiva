@@ -116,7 +116,7 @@ export default function ReportModal({ situation, verdict, report, loading, error
                     🔒 Plan de mejora paso a paso
                   </p>
                   <p style={{ fontSize: '13px', color: 'var(--t2)', lineHeight: 1.6, marginBottom: '12px' }}>
-                    6 a 8 pasos concretos y priorizados, con el esfuerzo estimado de cada uno — disponible en el informe completo.
+                    Ya tienes gratis el resumen, las ideas, recursos y opiniones de la junta. El informe completo añade 6 a 8 pasos concretos y priorizados, con el esfuerzo estimado de cada uno, y permite descargarlo.
                   </p>
                   <button
                     onClick={onUpgrade}

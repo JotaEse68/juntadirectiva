@@ -33,7 +33,7 @@ Como ${director.name} (${director.title}), da tu análisis experto y posición. 
 }
 
 // Llama al Chairman para el veredicto final basado en todos los análisis
-async function callVerdict({ situation, meetingType, responses, apiKey, provider }) {
+async function callVerdict({ situation, meetingType, contextBlock, responses, apiKey, provider }) {
   const summaries = responses
     .map(r => `${r.director.name} (${r.director.title}):\n${r.text}`)
     .join('\n\n---\n\n')
@@ -50,6 +50,8 @@ Sé directo, ejecutivo y claro — y siempre constructivo: incluso cuando la rec
 
 SITUACIÓN ORIGINAL:
 ${situation}
+
+${contextBlock ? `CONTEXTO DE APOYO YA LEÍDO:\n${contextBlock}\n` : ''}
 
 ANÁLISIS DE LOS DIRECTORES:
 ${summaries}
@@ -157,6 +159,7 @@ export function useBoard() {
       const verdictText = await callVerdict({
         situation,
         meetingType,
+        contextBlock: contextBlock || '',
         responses: successful,
         apiKey: apiKey || null,
         provider: provider || 'claude',

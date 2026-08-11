@@ -32,6 +32,21 @@ async function extractMD(file) {
   return text.slice(0, 8000)
 }
 
+// Un modelo puede devolver una negativa aunque se le haya enviado texto válido.
+// No la tratamos como un resumen listo para debatir: el usuario necesita un error
+// claro para volver a intentar el archivo, no una junta analizando una ausencia.
+function isUsefulSummary(summary) {
+  const normalized = (summary || '').trim().toLowerCase()
+  if (normalized.length < 80) return false
+  return ![
+    'no hay proyecto que analizar',
+    'no incluye ningún contenido',
+    'no tengo ningún material',
+    'no tengo suficiente información para analizar',
+    'no content to analyze',
+  ].some(message => normalized.includes(message))
+}
+
 export function useContextBuilder() {
   const [items, setItems]     = useState([]) // { id, type, name, status, summary, error }
   const [processing, setProcessing] = useState(false)
@@ -98,6 +113,9 @@ export function useContextBuilder() {
 
       // 2. Resumir via servidor
       const summary = await summarizeViaServer('extracted', { content: extracted }, apiKey, provider)
+      if (!isUsefulSummary(summary)) {
+        throw new Error('No se pudo obtener un resumen útil del documento. Prueba con un PDF que contenga texto seleccionable o añade una breve descripción.')
+      }
       updateItem(id, { status: 'done', summary })
 
     } catch (err) {
@@ -116,6 +134,7 @@ export function useContextBuilder() {
 
     try {
       const summary = await summarizeViaServer('url', { url }, apiKey, provider)
+      if (!isUsefulSummary(summary)) throw new Error('No se pudo obtener un resumen útil de la página.')
       updateItem(id, { status: 'done', summary })
     } catch (err) {
       updateItem(id, { status: 'error', error: err.message || 'No se pudo acceder a la URL' })
@@ -132,6 +151,7 @@ export function useContextBuilder() {
         updateItem(id, { status: 'done', summary: text.trim() })
       } else {
         const summary = await summarizeViaServer('note', { content: text }, apiKey, provider)
+        if (!isUsefulSummary(summary)) throw new Error('No se pudo obtener un resumen útil de la nota.')
         updateItem(id, { status: 'done', summary })
       }
     } catch (err) {
@@ -160,8 +180,15 @@ export function useContextBuilder() {
   const hasContext = items.some(it => it.status === 'done')
   const isProcessing = items.some(it => ['extracting', 'summarizing', 'fetching'].includes(it.status))
 
+  // Cuando no hay texto escrito, este briefing se convierte en la situación de
+  // partida. Así un PDF por sí solo basta para convocar la junta.
+  const buildSituationBrief = useCallback(() => {
+    const done = items.filter(it => it.status === 'done' && it.summary)
+    return done.map(it => `${it.type === 'file' ? `Documento de apoyo: ${it.name}` : it.type === 'url' ? `Fuente web: ${it.name}` : 'Nota de apoyo'}\n${it.summary}`).join('\n\n')
+  }, [items])
+
   return {
     items, addNote, processFile, processURL, removeItem,
-    buildContextBlock, hasContext, isProcessing,
+    buildContextBlock, buildSituationBrief, hasContext, isProcessing,
   }
 }

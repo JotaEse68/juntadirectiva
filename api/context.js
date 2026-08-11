@@ -59,6 +59,18 @@ Tu tarea: analizar el contenido proporcionado y extraer un briefing ejecutivo co
 3. Contexto importante que una junta directiva debería conocer
 Sé directo y específico. Solo incluye información realmente relevante.`
 
+function isUsefulSummary(summary) {
+  const normalized = (summary || '').trim().toLowerCase()
+  if (normalized.length < 80) return false
+  return ![
+    'no hay proyecto que analizar',
+    'no incluye ningún contenido',
+    'no tengo ningún material',
+    'no tengo suficiente información para analizar',
+    'no content to analyze',
+  ].some(message => normalized.includes(message))
+}
+
 async function summarizeClaude(userPrompt, apiKey) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -186,6 +198,11 @@ export default async function handler(req) {
     }
 
     const summary = await summarize(rawText, sourceType, apiKey, provider)
+    if (!isUsefulSummary(summary)) {
+      return new Response(JSON.stringify({ error: 'No se pudo obtener un resumen útil del contenido. Prueba con un PDF que contenga texto seleccionable o añade una breve descripción.' }), {
+        status: 422, headers: { ...c, 'Content-Type': 'application/json' }
+      })
+    }
     return new Response(JSON.stringify({ summary, chars: rawText.length }), {
       status: 200, headers: { ...c, 'Content-Type': 'application/json' }
     })
