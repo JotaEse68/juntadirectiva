@@ -51,9 +51,17 @@ KV_REST_API_URL
 KV_REST_API_TOKEN
 KV_REST_API_READ_ONLY_TOKEN
 REDIS_URL
+PRIVATE_ACCESS_CODE_HASH
+PRIVATE_ACCESS_COOKIE_SECRET
 ```
 
 `OPENAI_API_KEY` requiere saldo activo para que GPT-4o mini atienda el modo gratuito.
+
+## Ajustes privados de proveedores
+
+Los clientes no ven opciones de API propia ni proveedores. Los ajustes internos están disponibles en la ruta `/acceso-privado` y requieren un código validado por el servidor. La sesión privada dura 12 horas.
+
+Para cambiar el código, actualiza `PRIVATE_ACCESS_CODE_HASH` con el SHA-256 del nuevo código y vuelve a desplegar. `PRIVATE_ACCESS_COOKIE_SECRET` debe ser un secreto largo y aleatorio.
 
 ## Desarrollo y despliegue
 

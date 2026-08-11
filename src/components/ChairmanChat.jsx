@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { FREE_CHAT_LIMIT } from '../hooks/useChairmanChat.js'
 
-export default function ChairmanChat({ messages, sending, error, freeMessagesUsed, hasKey, onSend, onOpenSettings }) {
+export default function ChairmanChat({ messages, sending, error, freeMessagesUsed, hasKey, onSend }) {
   const [input, setInput] = useState('')
 
   const limitReached = !hasKey && freeMessagesUsed >= FREE_CHAT_LIMIT
@@ -58,9 +58,7 @@ export default function ChairmanChat({ messages, sending, error, freeMessagesUse
         {limitReached ? (
           <div style={{ padding: '12px 16px', background: 'var(--blue-dim)', border: '1px solid var(--blue-bd)', borderRadius: 'var(--r-md)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
             <p style={{ fontSize: '12px', color: 'var(--t2)' }}>Llegaste al límite gratis de esta sesión.</p>
-            <button onClick={onOpenSettings} style={{ fontSize: '12px', color: 'var(--blue)', fontWeight: 600, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>
-              Usar mi API key →
-            </button>
+            <span style={{ fontSize: '12px', color: 'var(--t3)' }}>Podrás volver a preguntar en la próxima sesión.</span>
           </div>
         ) : (
           <div style={{ display: 'flex', gap: '8px' }}>

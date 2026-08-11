@@ -8,6 +8,7 @@ import DailyLimitBanner from './components/DailyLimitBanner.jsx'
 import ReportModal from './components/ReportModal.jsx'
 import ChairmanChat from './components/ChairmanChat.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
+import PrivateAccessModal from './components/PrivateAccessModal.jsx'
 import { useBoard } from './hooks/useBoard.js'
 import { useContextBuilder } from './hooks/useContext.js'
 import { useReport } from './hooks/useReport.js'
@@ -34,6 +35,8 @@ export default function App() {
   const [apiProvider, setApiProvider] = useState(() => localStorage.getItem(STORAGE_PROVIDER_KEY) || 'claude')
   const [showSettings, setShowSettings] = useState(false)
   const [selectedDirector, setSelectedDirector] = useState(null)
+  const [privateAccess, setPrivateAccess] = useState(false)
+  const [showPrivateAccess, setShowPrivateAccess] = useState(() => window.location.pathname === '/acceso-privado')
 
   const { conveneBoard, reset, pause, resume, directorStates, verdict, verdictLoading, phase, activeDirectors, globalError, isPaused } = useBoard()
   const { items: ctxItems, addNote, processFile, processURL, removeItem: removeCtxItem,
@@ -48,6 +51,18 @@ export default function App() {
   const [gateError, setGateError] = useState(null)
   const [gateChecking, setGateChecking] = useState(false)
   const [buyingExtra, setBuyingExtra] = useState(false)
+
+  useEffect(() => {
+    if (!showPrivateAccess) return
+    fetch('/api/private-access').then(res => res.json()).then(data => {
+      if (data.authorized) {
+        setPrivateAccess(true)
+        setShowPrivateAccess(false)
+        setShowSettings(true)
+        window.history.replaceState({}, '', '/')
+      }
+    }).catch(() => {})
+  }, [showPrivateAccess])
 
   const addReportCredits = useCallback((n) => {
     setReportCredits(prev => {
@@ -248,6 +263,12 @@ export default function App() {
     setApiKey(key)
     setApiProvider(key ? provider : 'claude')
   }
+  const handlePrivateGranted = () => {
+    setPrivateAccess(true)
+    setShowPrivateAccess(false)
+    setShowSettings(true)
+    window.history.replaceState({}, '', '/')
+  }
 
   // Extrae el voto de un director del texto generado
   const getDirectorVote = (dirId) => {
@@ -260,6 +281,8 @@ export default function App() {
     }
     return null
   }
+
+  if (showPrivateAccess) return <PrivateAccessModal onGranted={handlePrivateGranted} />
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -292,10 +315,9 @@ export default function App() {
               {isPaused ? '▶️' : '⏸️'}
             </button>
           )}
-          <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '20px', border: `1px solid ${apiKey ? 'var(--blue-bd)' : 'var(--bd)'}`, color: apiKey ? 'var(--blue)' : 'var(--t3)', background: apiKey ? 'var(--blue-dim)' : 'transparent' }}>
-            {apiKey ? '🔑 API propia activa' : '🌐 2 análisis/día'}
+          <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '20px', border: '1px solid var(--bd)', color: 'var(--t3)', background: 'transparent' }}>
+            🌐 2 análisis/día
           </span>
-          <button onClick={() => setShowSettings(true)} style={{ padding: '6px 10px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t3)', fontSize: '13px' }}>⚙️</button>
         </div>
       </nav>
 
@@ -449,10 +471,7 @@ export default function App() {
                 <DailyLimitBanner error={gateError} onBuyExtra={handleBuyExtra} buying={buyingExtra} />
               )}
 
-              <p style={{ fontSize: '12px', color: 'var(--t3)', textAlign: 'center' }}>
-                {apiKey ? '🔑 Tu API key · reuniones ilimitadas' : '🌐 Modo gratuito · 2 análisis/día'} ·{' '}
-                <button onClick={() => setShowSettings(true)} style={{ color: 'var(--blue)', fontSize: '12px', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>cambiar</button>
-              </p>
+              <p style={{ fontSize: '12px', color: 'var(--t3)', textAlign: 'center' }}>🌐 Modo gratuito · 2 análisis/día</p>
             </div>
 
           </div>
@@ -482,7 +501,6 @@ export default function App() {
             {globalError && (
               <div style={{ padding: '14px 18px', background: 'var(--red-dim)', border: '1px solid var(--red-bd)', borderRadius: 'var(--r-md)', color: 'var(--red)', fontSize: '13px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                 <span>⚠️ {globalError}</span>
-                {!apiKey && <button onClick={() => setShowSettings(true)} style={{ color: 'var(--blue)', fontSize: '12px', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>Añadir API key →</button>}
               </div>
             )}
 
@@ -526,7 +544,6 @@ export default function App() {
                 freeMessagesUsed={freeMessagesUsed}
                 hasKey={!!apiKey}
                 onSend={handleSendChat}
-                onOpenSettings={() => setShowSettings(true)}
               />
             )}
 
@@ -579,7 +596,7 @@ export default function App() {
           upgrading={buyingReport}
         />
       )}
-      {showSettings && <SettingsModal currentProvider={apiProvider} currentKey={apiKey} onSave={handleSaveKey} onClose={() => setShowSettings(false)} />}
+      {privateAccess && showSettings && <SettingsModal currentProvider={apiProvider} currentKey={apiKey} onSave={handleSaveKey} onClose={() => setShowSettings(false)} />}
       {selectedDirector && (
         <DirectorModal
           director={selectedDirector}
