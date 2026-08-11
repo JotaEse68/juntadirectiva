@@ -97,7 +97,7 @@ export default async function handler(req) {
   // El modelo lo decide el servidor: el navegador solo puede pedir modo gratuito o premium.
   // Si todavía no existe OPENAI_API_KEY, el modo gratuito conserva un fallback a Claude.
   const useOpenAI = mode === 'free' && Boolean(process.env.OPENAI_API_KEY)
-  const provider = useOpenAI ? 'openai' : 'claude'
+  let provider = useOpenAI ? 'openai' : 'claude'
   const apiKey = useOpenAI ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY
   if (!apiKey) return new Response(JSON.stringify({ error: 'Servicio no configurado' }), { status: 503, headers: { ...c, 'Content-Type': 'application/json' } })
 
@@ -108,6 +108,22 @@ export default async function handler(req) {
       : await createClaudeStream({ apiKey, systemPrompt, userPrompt, maxTokens })
   } catch {
     return new Response(JSON.stringify({ error: `Error conectando con ${useOpenAI ? 'OpenAI' : 'Anthropic'}` }), { status: 502, headers: { ...c, 'Content-Type': 'application/json' } })
+  }
+
+  // Una cuenta de OpenAI sin saldo devuelve 429. En ese caso el análisis no debe morir:
+  // seguimos usando el proveedor ya configurado para que el producto continúe operativo.
+  if (useOpenAI && !upstreamRes.ok && (upstreamRes.status === 429 || upstreamRes.status >= 500) && process.env.ANTHROPIC_API_KEY) {
+    provider = 'claude'
+    try {
+      upstreamRes = await createClaudeStream({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+        systemPrompt,
+        userPrompt,
+        maxTokens,
+      })
+    } catch {
+      return new Response(JSON.stringify({ error: 'Error conectando con OpenAI y Anthropic' }), { status: 502, headers: { ...c, 'Content-Type': 'application/json' } })
+    }
   }
 
   if (!upstreamRes.ok) {
