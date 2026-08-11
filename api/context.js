@@ -122,7 +122,7 @@ async function summarizeGemini(userPrompt, apiKey) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
 }
 
-// Resume el texto con el proveedor elegido. En modo gratuito (sin clientApiKey) siempre es Claude.
+// Resume el texto con el proveedor elegido. En gratuito se usa GPT-4o mini si está configurado.
 async function summarize(text, sourceType, apiKey, provider) {
   const userPrompt = `Analiza este contenido (${sourceType}) y extrae el briefing ejecutivo:\n\n${text}`
   if (provider === 'openai') return summarizeOpenAI(userPrompt, apiKey)
@@ -149,9 +149,12 @@ export default async function handler(req) {
   }
 
   const { type, content, url, clientApiKey } = body
-  // Modo gratuito (sin key propia) siempre usa Claude con la key del servidor.
-  const provider = clientApiKey ? (body.provider || 'claude') : 'claude'
-  const apiKey = clientApiKey || process.env.ANTHROPIC_API_KEY
+  // El PDF/documento forma parte del análisis gratuito: usa GPT-4o mini cuando existe la
+  // clave del servidor. Claude queda como fallback para no interrumpir el servicio.
+  const provider = clientApiKey
+    ? (body.provider || 'claude')
+    : (process.env.OPENAI_API_KEY ? 'openai' : 'claude')
+  const apiKey = clientApiKey || (provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY)
   if (!apiKey) return new Response(JSON.stringify({ error: 'Sin API key' }), { status: 503, headers: { ...c, 'Content-Type': 'application/json' } })
 
   try {

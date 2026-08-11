@@ -41,12 +41,12 @@ function extractDelta(provider, parsed) {
   return ''
 }
 
-// Llamada genérica con streaming. Sin apiKey (modo gratuito) siempre pasa por /api/coach con
-// Claude, sea cual sea el provider elegido — el servidor aporta su propia key en ese caso.
-export async function streamCompletion({ provider, apiKey, system, userMsg, maxTokens, onChunk }) {
+// Llamada genérica con streaming. Sin API propia el servidor elige el modelo según el modo:
+// GPT-4o mini para análisis gratis y Claude Sonnet para el plan premium.
+export async function streamCompletion({ provider, apiKey, system, userMsg, maxTokens, onChunk, serverMode = 'free' }) {
   const req = apiKey
     ? buildRequest({ provider, apiKey, system, userMsg, maxTokens })
-    : { endpoint: '/api/coach', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemPrompt: system, userPrompt: userMsg, maxTokens }) }
+    : { endpoint: '/api/coach', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemPrompt: system, userPrompt: userMsg, maxTokens, mode: serverMode }) }
 
   const res = await fetch(req.endpoint, { method: 'POST', headers: req.headers, body: req.body })
   if (!res.ok) {
@@ -54,7 +54,7 @@ export async function streamCompletion({ provider, apiKey, system, userMsg, maxT
     throw new Error(data.error || `Error ${res.status}`)
   }
 
-  const effectiveProvider = apiKey ? provider : 'claude'
+  const effectiveProvider = apiKey ? provider : (res.headers.get('X-AI-Provider') || 'openai')
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let fullText = ''

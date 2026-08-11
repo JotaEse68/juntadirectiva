@@ -34,7 +34,35 @@ function cors(origin) {
     'Access-Control-Allow-Origin': allowed === '*' ? '*' : (origin === allowed ? origin : ''),
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Expose-Headers': 'X-AI-Provider',
   }
+}
+
+async function createClaudeStream({ apiKey, systemPrompt, userPrompt, maxTokens }) {
+  return fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: Math.min(maxTokens, 1200),
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+      stream: true,
+    }),
+  })
+}
+
+async function createOpenAIStream({ apiKey, systemPrompt, userPrompt, maxTokens }) {
+  return fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      max_tokens: Math.min(maxTokens, 1200),
+      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+      stream: true,
+    }),
+  })
 }
 
 export default async function handler(req) {
@@ -62,30 +90,35 @@ export default async function handler(req) {
   try { body = await req.json() } catch { return new Response(JSON.stringify({ error: 'JSON inválido' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } }) }
 
   const { systemPrompt, userPrompt, maxTokens = 800 } = body
+  const mode = body.mode === 'premium' ? 'premium' : 'free'
   if (!systemPrompt || !userPrompt) return new Response(JSON.stringify({ error: 'Faltan prompts' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (userPrompt.length > 12000 || systemPrompt.length > 8000) return new Response(JSON.stringify({ error: 'Prompt demasiado largo' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  // El modelo lo decide el servidor: el navegador solo puede pedir modo gratuito o premium.
+  // Si todavía no existe OPENAI_API_KEY, el modo gratuito conserva un fallback a Claude.
+  const useOpenAI = mode === 'free' && Boolean(process.env.OPENAI_API_KEY)
+  const provider = useOpenAI ? 'openai' : 'claude'
+  const apiKey = useOpenAI ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY
   if (!apiKey) return new Response(JSON.stringify({ error: 'Servicio no configurado' }), { status: 503, headers: { ...c, 'Content-Type': 'application/json' } })
 
-  let anthropicRes
+  let upstreamRes
   try {
-    anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: Math.min(maxTokens, 1200), system: systemPrompt, messages: [{ role: 'user', content: userPrompt }], stream: true }),
-    })
-  } catch { return new Response(JSON.stringify({ error: 'Error conectando con Anthropic' }), { status: 502, headers: { ...c, 'Content-Type': 'application/json' } }) }
-
-  if (!anthropicRes.ok) {
-    const t = await anthropicRes.text().catch(() => '')
-    let msg = `Error Anthropic ${anthropicRes.status}`
-    try { msg = JSON.parse(t).error?.message || msg } catch {}
-    return new Response(JSON.stringify({ error: msg }), { status: anthropicRes.status, headers: { ...c, 'Content-Type': 'application/json' } })
+    upstreamRes = useOpenAI
+      ? await createOpenAIStream({ apiKey, systemPrompt, userPrompt, maxTokens })
+      : await createClaudeStream({ apiKey, systemPrompt, userPrompt, maxTokens })
+  } catch {
+    return new Response(JSON.stringify({ error: `Error conectando con ${useOpenAI ? 'OpenAI' : 'Anthropic'}` }), { status: 502, headers: { ...c, 'Content-Type': 'application/json' } })
   }
 
-  return new Response(anthropicRes.body, {
+  if (!upstreamRes.ok) {
+    const t = await upstreamRes.text().catch(() => '')
+    let msg = `Error ${useOpenAI ? 'OpenAI' : 'Anthropic'} ${upstreamRes.status}`
+    try { msg = JSON.parse(t).error?.message || msg } catch {}
+    return new Response(JSON.stringify({ error: msg }), { status: upstreamRes.status, headers: { ...c, 'Content-Type': 'application/json' } })
+  }
+
+  return new Response(upstreamRes.body, {
     status: 200,
-    headers: { ...c, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'X-RateLimit-Limit': String(RATE_LIMIT_MAX), 'X-RateLimit-Remaining': String(remaining), 'X-RateLimit-Reset': String(Math.ceil(resetAt / 1000)) }
+    headers: { ...c, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'X-AI-Provider': provider, 'X-RateLimit-Limit': String(RATE_LIMIT_MAX), 'X-RateLimit-Remaining': String(remaining), 'X-RateLimit-Reset': String(Math.ceil(resetAt / 1000)) }
   })
 }
