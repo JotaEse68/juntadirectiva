@@ -34,7 +34,6 @@ export default function App() {
   const [apiProvider, setApiProvider] = useState(() => localStorage.getItem(STORAGE_PROVIDER_KEY) || 'claude')
   const [showSettings, setShowSettings] = useState(false)
   const [selectedDirector, setSelectedDirector] = useState(null)
-  const [showBoardCustomization, setShowBoardCustomization] = useState(false)
 
   const { conveneBoard, reset, pause, resume, directorStates, verdict, verdictLoading, phase, activeDirectors, globalError, isPaused } = useBoard()
   const { items: ctxItems, addNote, processFile, processURL, removeItem: removeCtxItem,
@@ -323,21 +322,11 @@ export default function App() {
 
             {/* El elenco — pills seleccionables: quién participa en esta sesión */}
             <div className="fade-up board-customization" style={{ marginBottom: '48px', animationDelay: '.08s' }}>
-              <button
-                type="button"
-                onClick={() => setShowBoardCustomization(open => !open)}
-                aria-expanded={showBoardCustomization}
-                style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: '16px', padding: '16px 18px', borderRadius: 'var(--r-md)', border: '1px solid var(--bd)', color: 'var(--t2)', background: 'var(--bg2)', textAlign: 'left' }}
-              >
-                <span>
-                  <strong style={{ display: 'block', color: 'var(--t1)', fontSize: '13px', marginBottom: '2px' }}>Junta recomendada para esta reunión · {selectedIds.length} especialistas</strong>
-                  <span style={{ fontSize: '12px' }}>La elegimos por ti según el reto. Personalízala solo si quieres otra perspectiva.</span>
-                </span>
-                <span style={{ color: 'var(--blue)', fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap' }}>{showBoardCustomization ? 'Cerrar' : 'Personalizar'} {showBoardCustomization ? '↑' : '↓'}</span>
-              </button>
-              {showBoardCustomization && <div style={{ marginTop: '16px' }}>
               <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '14px', textAlign: 'center', fontWeight: 500 }}>
-                Elige quién participa · {selectedIds.length} de {DIRECTORS.length} directores
+                Tu junta directiva · {DIRECTORS.length} especialistas · {selectedIds.length} participantes recomendados
+              </p>
+              <p style={{ fontSize: '12px', color: 'var(--t2)', textAlign: 'center', margin: '-5px auto 16px', maxWidth: '520px' }}>
+                Todos están aquí. La selección activa se adapta al reto; pulsa sobre cualquiera para incluirlo o quitarlo.
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
                 {DIRECTORS.map(d => {
@@ -375,7 +364,6 @@ export default function App() {
                   El debate es secuencial (cada director escucha a los anteriores) — con {selectedIds.length} directores puede tardar varios minutos.
                 </p>
               )}
-              </div>}
             </div>
 
             {/* Formulario */}
