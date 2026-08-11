@@ -314,12 +314,8 @@ export default function App() {
                 Antes de decidir,<br /><em style={{ color: 'var(--blue)' }}>convoca la junta.</em>
               </h1>
               <p style={{ fontSize: '16px', color: 'var(--t2)', maxWidth: '480px', margin: '0 auto', lineHeight: 1.7 }}>
-                12 directores especializados debaten tu situación entre sí — se escuchan, se rebaten — y emiten un veredicto ejecutivo con próximos pasos.
+                Las grandes empresas no deciden a ciegas: se rodean de una junta que cuestiona, contrasta y exige claridad. Ahora tú también. Convoca a 12 especialistas para convertir una decisión difícil en una dirección clara.
               </p>
-            </div>
-
-            <div className="fade-up" style={{ marginBottom: '32px', animationDelay: '.04s' }}>
-              <DownloadBanner ready={false} />
             </div>
 
             {/* El elenco — pills seleccionables: quién participa en esta sesión */}
@@ -440,6 +436,10 @@ export default function App() {
                 {apiKey ? '🔑 Tu API key · reuniones ilimitadas' : '🌐 Modo gratuito · 2 análisis/día'} ·{' '}
                 <button onClick={() => setShowSettings(true)} style={{ color: 'var(--blue)', fontSize: '12px', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>cambiar</button>
               </p>
+            </div>
+
+            <div className="fade-up" style={{ marginTop: '28px', animationDelay: '.2s' }}>
+              <DownloadBanner ready={false} />
             </div>
           </>
         )}

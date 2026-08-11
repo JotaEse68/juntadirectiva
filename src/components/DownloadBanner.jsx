@@ -5,41 +5,54 @@ export default function DownloadBanner({ ready = true, loading, credits, onGener
 
   return (
     <div style={{
-      background: 'var(--bg2)',
-      border: '1px solid var(--blue-bd)',
-      borderRadius: 'var(--r-xl)',
-      padding: '22px 24px',
+      borderTop: '1px solid var(--bd)',
+      borderBottom: '1px solid var(--bd)',
+      padding: '24px 2px',
       display: 'flex',
       alignItems: 'center',
-      gap: '20px',
+      gap: '28px',
       flexWrap: 'wrap',
     }}>
-      <div style={{ flex: 1, minWidth: '200px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-          <span style={{ fontSize: '16px' }}>📄</span>
-          <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--t1)' }}>De veredicto a plan de acción</p>
-        </div>
-        <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.5 }}>
-          <strong style={{ color: 'var(--t1)' }}>Incluido gratis:</strong> el veredicto de la junta, sus consensos, el riesgo principal y los próximos pasos inmediatos.
+      <div style={{ flex: '1 1 250px', minWidth: '220px' }}>
+        <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: '7px' }}>
+          {ready ? 'Tu siguiente movimiento' : 'Más allá del análisis'}
         </p>
-        <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.5, marginTop: '5px' }}>
-          <strong style={{ color: 'var(--blue)' }}>El plan de acción añade:</strong> hoja de ruta 30/60/90 días, responsables, KPIs, riesgos, contingencias y descarga.
+        <p style={{ fontFamily: "'Playfair Display', serif", fontSize: '22px', lineHeight: 1.2, color: 'var(--t1)', marginBottom: '8px' }}>
+          {ready ? 'Convierte la recomendación en avance.' : 'Claridad para decidir. Dirección para ejecutar.'}
         </p>
-        {hasCredits && (
-          <p style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '6px' }}>
-            {credits} informe{credits !== 1 ? 's' : ''} disponible{credits !== 1 ? 's' : ''}
-          </p>
-        )}
+        <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.6, maxWidth: '390px' }}>
+          {ready
+            ? 'Ya sabes qué piensa la junta. El plan de acción traduce esa conclusión a responsables, plazos y señales concretas.'
+            : 'La junta te da un veredicto gratis. Si luego necesitas llevarlo a la realidad, podrás convertirlo en un plan operativo.'}
+        </p>
       </div>
 
-      {!ready ? (
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <p style={{ fontSize: '11px', color: 'var(--blue)', marginBottom: '6px' }}>Disponible al terminar tu veredicto</p>
-          <button disabled style={{ padding: '10px 18px', borderRadius: 'var(--r-md)', border: '1px solid var(--bd)', background: 'var(--bg3)', color: 'var(--t3)', fontSize: '12px', cursor: 'not-allowed' }}>
-            Ver el plan de acción
-          </button>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(125px, 1fr))', gap: '12px', flex: '1 1 270px' }}>
+        <div style={{ paddingLeft: '12px', borderLeft: '2px solid var(--bd)' }}>
+          <p style={{ fontSize: '10px', color: 'var(--t3)', letterSpacing: '.08em', fontWeight: 700, marginBottom: '4px' }}>01 · ANALIZAR</p>
+          <p style={{ fontSize: '12px', color: 'var(--t1)', lineHeight: 1.45 }}>Veredicto, consensos, riesgo principal y próximos pasos.</p>
+          <p style={{ fontSize: '11px', color: 'var(--t3)', marginTop: '5px' }}>Incluido gratis</p>
         </div>
-      ) : hasCredits ? (
+        <div style={{ paddingLeft: '12px', borderLeft: '2px solid var(--blue)' }}>
+          <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.08em', fontWeight: 700, marginBottom: '4px' }}>02 · EJECUTAR</p>
+          <p style={{ fontSize: '12px', color: 'var(--t1)', lineHeight: 1.45 }}>30/60/90 días, responsables, KPIs, riesgos y contingencias.</p>
+          <p style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '5px' }}>Plan de acción</p>
+        </div>
+      </div>
+
+      {hasCredits && (
+        <p style={{ width: '100%', fontSize: '11px', color: 'var(--blue)', marginTop: '-12px' }}>
+          {credits} plan{credits !== 1 ? 'es' : ''} disponible{credits !== 1 ? 's' : ''}
+        </p>
+      )}
+
+      {!ready ? (
+        <p style={{ width: '100%', fontSize: '11px', color: 'var(--t3)', marginTop: '-10px' }}>
+          No tienes que comprar nada para recibir el análisis. El plan solo se ofrece cuando ya conoces el veredicto.
+        </p>
+      ) : null}
+
+      {ready && (hasCredits ? (
         <button
           onClick={onGenerate}
           disabled={loading}
@@ -101,7 +114,7 @@ export default function DownloadBanner({ ready = true, loading, credits, onGener
             Pago único · sin suscripción · desbloqueo inmediato
           </p>
         </div>
-      )}
+      ))}
     </div>
   )
 }
