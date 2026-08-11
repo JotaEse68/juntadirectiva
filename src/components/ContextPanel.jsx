@@ -104,7 +104,7 @@ export default function ContextPanel({ onProcessFile, onProcessURL, onAddNote, i
       {/* Botones de acción */}
       <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
         {/* Subir archivo */}
-        <input ref={fileRef} type="file" accept=".pdf,.doc,.docx" multiple onChange={handleFiles} style={{ display:'none' }} />
+        <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.md" multiple onChange={handleFiles} style={{ display:'none' }} />
         <button
           onClick={() => fileRef.current?.click()}
           disabled={isProcessing}
@@ -118,7 +118,7 @@ export default function ContextPanel({ onProcessFile, onProcessURL, onAddNote, i
           onMouseEnter={e => { e.currentTarget.style.borderColor='var(--blue-bd)'; e.currentTarget.style.color='var(--blue)' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor='var(--bd)'; e.currentTarget.style.color='var(--t2)' }}
         >
-          <span>📄</span> PDF / Word
+          <span>📄</span> PDF / Word / MD
         </button>
 
         {/* URL */}
@@ -168,7 +168,7 @@ export default function ContextPanel({ onProcessFile, onProcessURL, onAddNote, i
         >
           <p style={{ fontSize:'13px', color:'var(--t3)', lineHeight:1.6 }}>
             Arrastra archivos aquí o usa los botones<br />
-            <span style={{ fontSize:'11px' }}>PDF · Word · URLs · Notas de texto</span>
+            <span style={{ fontSize:'11px' }}>PDF · Word · Markdown · URLs · Notas de texto</span>
           </p>
         </div>
       )}

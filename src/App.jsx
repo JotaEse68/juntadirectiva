@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import DebateChat from './components/DebateChat.jsx'
 import DirectorModal from './components/DirectorModal.jsx'
 import DirectorsRoster from './components/DirectorsRoster.jsx'
@@ -18,6 +18,7 @@ import { computeConsensus } from './lib/consensus.js'
 
 const STORAGE_KEY = 'junta_api_key'
 const STORAGE_PROVIDER_KEY = 'junta_api_provider'
+const CREDITS_KEY = 'junta_report_credits'
 const MAX_CHARS = 800
 
 export default function App() {
@@ -36,11 +37,62 @@ export default function App() {
   const [showReport, setShowReport] = useState(false)
   const { messages: chatMessages, sending: chatSending, error: chatError, freeMessagesUsed, sendMessage: sendChatMessage, reset: resetChat } = useChairmanChat()
 
+  const [reportCredits, setReportCredits] = useState(() => Number(localStorage.getItem(CREDITS_KEY) || 0))
+  const [buyingReport, setBuyingReport] = useState(false)
+  const [checkoutError, setCheckoutError] = useState(null)
+
+  const addReportCredits = useCallback((n) => {
+    setReportCredits(prev => {
+      const next = prev + n
+      localStorage.setItem(CREDITS_KEY, String(next))
+      return next
+    })
+  }, [])
+
+  // Al volver de Stripe Checkout, confirma el pago server-side y desbloquea el informe.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const sessionId = params.get('checkout_session_id')
+    if (!sessionId) return
+    window.history.replaceState({}, '', window.location.pathname)
+    fetch('/api/verify-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.paid) addReportCredits(data.product === 'bundle' ? 3 : 1)
+        else setCheckoutError('El pago no se completó.')
+      })
+      .catch(() => setCheckoutError('No se pudo verificar el pago.'))
+  }, [addReportCredits])
+
   const consensus = useMemo(() => computeConsensus(directorStates), [directorStates])
 
   const handleGenerateReport = () => {
+    if (reportCredits <= 0) return
+    addReportCredits(-1)
     setShowReport(true)
     generateReport({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey: apiKey || null, provider: apiProvider })
+  }
+
+  const handleBuyReport = async (product) => {
+    setCheckoutError(null)
+    setBuyingReport(true)
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error creando el pago')
+      window.location.href = data.url
+    } catch (err) {
+      setCheckoutError(err.message)
+      setBuyingReport(false)
+    }
   }
 
   const handleSendChat = (text) => {
@@ -312,8 +364,14 @@ export default function App() {
                 <DownloadBanner
                   sessionData={{ directorCount: activeDirectors.length }}
                   loading={reportLoading}
+                  credits={reportCredits}
                   onGenerate={handleGenerateReport}
+                  onBuy={handleBuyReport}
+                  buying={buyingReport}
                 />
+                {checkoutError && (
+                  <p style={{ fontSize: '12px', color: 'var(--red)', marginTop: '10px' }}>⚠️ {checkoutError}</p>
+                )}
               </div>
             )}
 

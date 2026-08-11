@@ -26,6 +26,12 @@ async function extractDOCX(file) {
   return result.value.slice(0, 8000)
 }
 
+// Extrae texto de Markdown — ya es texto plano, se lee directo
+async function extractMD(file) {
+  const text = await file.text()
+  return text.slice(0, 8000)
+}
+
 export function useContextBuilder() {
   const [items, setItems]     = useState([]) // { id, type, name, status, summary, error }
   const [processing, setProcessing] = useState(false)
@@ -58,23 +64,27 @@ export function useContextBuilder() {
     return data.summary
   }
 
-  // Procesa un archivo (PDF o Word)
+  // Procesa un archivo (PDF, Word o Markdown)
   const processFile = useCallback(async (file, apiKey, provider) => {
     const ext = file.name.split('.').pop().toLowerCase()
-    if (!['pdf', 'doc', 'docx'].includes(ext)) {
-      return { error: 'Solo se admiten PDF y Word (.doc, .docx)' }
+    const id = addItem({ type: 'file', name: file.name, status: 'extracting' })
+
+    if (!['pdf', 'doc', 'docx', 'md'].includes(ext)) {
+      updateItem(id, { status: 'error', error: 'Solo se admiten PDF, Word (.doc, .docx) y Markdown (.md)' })
+      return
     }
     if (file.size > 20 * 1024 * 1024) {
-      return { error: 'Archivo demasiado grande (máx 20MB)' }
+      updateItem(id, { status: 'error', error: 'Archivo demasiado grande (máx 20MB)' })
+      return
     }
-
-    const id = addItem({ type: 'file', name: file.name, status: 'extracting' })
 
     try {
       // 1. Extraer texto en el cliente
       let extracted = ''
       if (ext === 'pdf') {
         extracted = await extractPDF(file)
+      } else if (ext === 'md') {
+        extracted = await extractMD(file)
       } else {
         extracted = await extractDOCX(file)
       }
