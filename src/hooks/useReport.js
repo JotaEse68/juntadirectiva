@@ -29,7 +29,7 @@ PLAN DE MEJORA DETALLADO
 
 Sé denso en valor, cero relleno ni frases genéricas. Este informe debe sentirse claramente superior al veredicto gratuito.`
 
-const REPORT_SYSTEM_FREE = `Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces una ampliación gratuita del veredicto — más profunda que el veredicto rápido, pero sin el plan de ejecución detallado (eso es exclusivo de la versión de pago). No lo menciones ni lo insinúes, simplemente no lo incluyas.
+const REPORT_SYSTEM_FREE = `Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces una ampliación gratuita del veredicto — más profunda que el veredicto rápido.
 
 Estructura obligatoria, con estos encabezados exactos en mayúsculas, cada uno en su propia línea:
 
