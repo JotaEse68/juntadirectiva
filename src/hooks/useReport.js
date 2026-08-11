@@ -3,7 +3,7 @@ import { DIRECTORS } from '../lib/directors.js'
 import { streamCompletion } from '../lib/aiClient.js'
 
 // Opinión exprés (2-3 frases) de un director que no participó en el debate en vivo —
-// para que ningún miembro de la junta de 12 quede sin decir nada en el informe completo.
+// para que ningún miembro de la junta de 12 quede sin decir nada en el informe.
 async function quickTake({ director, situation, apiKey, provider }) {
   const userMsg = `SITUACIÓN: ${situation}
 
@@ -11,7 +11,7 @@ Como ${director.name} (${director.title}), da tu opinión exprés en 2-3 frases 
   return streamCompletion({ provider, apiKey, system: director.systemPrompt, userMsg, maxTokens: 180 })
 }
 
-const REPORT_SYSTEM = `Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces el INFORME COMPLETO — un documento notablemente más profundo y útil que el veredicto gratuito ya entregado al usuario. No repitas el veredicto, amplíalo.
+const REPORT_SYSTEM_PAID = `Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces el INFORME COMPLETO — un documento notablemente más profundo y útil que el veredicto gratuito ya entregado al usuario. No repitas el veredicto, amplíalo.
 
 Estructura obligatoria, con estos encabezados exactos en mayúsculas, cada uno en su propia línea:
 
@@ -29,12 +29,27 @@ PLAN DE MEJORA DETALLADO
 
 Sé denso en valor, cero relleno ni frases genéricas. Este informe debe sentirse claramente superior al veredicto gratuito.`
 
+const REPORT_SYSTEM_FREE = `Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces una ampliación gratuita del veredicto — más profunda que el veredicto rápido, pero sin el plan de ejecución detallado (eso es exclusivo de la versión de pago). No lo menciones ni lo insinúes, simplemente no lo incluyas.
+
+Estructura obligatoria, con estos encabezados exactos en mayúsculas, cada uno en su propia línea:
+
+RESUMEN AMPLIADO
+Dos o tres párrafos que profundizan en el análisis más allá del veredicto rápido, conectando los puntos de vista de los directores que sí debatieron en vivo con las opiniones exprés de los que no.
+
+IDEAS ADICIONALES
+4 a 6 ideas concretas y accionables que NO aparecieron en el veredicto rápido.
+
+RECURSOS Y HERRAMIENTAS RECOMENDADAS
+Nombra herramientas, plataformas, metodologías o tipos de recursos reales y conocidos, agrupados por categoría. No inventes URLs ni enlaces específicos — solo nombres reales de herramientas o categorías de búsqueda.
+
+Sé denso en valor, cero relleno ni frases genéricas.`
+
 export function useReport() {
-  const [report, setReport] = useState(null)       // { text, quickTakes: [{director,text}] }
+  const [report, setReport] = useState(null)       // { text, quickTakes: [{director,text}], locked }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const generateReport = useCallback(async ({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey, provider }) => {
+  const generateReport = useCallback(async ({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey, provider, tier = 'paid' }) => {
     setLoading(true)
     setError(null)
     setReport(null)
@@ -71,12 +86,13 @@ ${liveSummary}
 OPINIONES EXPRÉS DE LOS DIRECTORES QUE NO PARTICIPARON EN VIVO:
 ${quickSummary || '(todos los directores participaron en vivo)'}
 
-Produce el informe completo siguiendo exactamente la estructura indicada.`
+Produce el informe siguiendo exactamente la estructura indicada.`
 
-      const text = await streamCompletion({ provider, apiKey, system: REPORT_SYSTEM, userMsg: reportPrompt, maxTokens: 1500 })
-      setReport({ text, quickTakes })
+      const system = tier === 'free' ? REPORT_SYSTEM_FREE : REPORT_SYSTEM_PAID
+      const text = await streamCompletion({ provider, apiKey, system, userMsg: reportPrompt, maxTokens: tier === 'free' ? 900 : 1500 })
+      setReport({ text, quickTakes, locked: tier === 'free' })
     } catch (err) {
-      setError(err.message || 'No se pudo generar el informe completo')
+      setError(err.message || 'No se pudo generar el informe')
     } finally {
       setLoading(false)
     }
