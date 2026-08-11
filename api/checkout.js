@@ -5,6 +5,7 @@ export const config = { runtime: 'edge' }
 const PRICES = {
   single: 'price_1U3B1eFNpWfaUovUQrzZfQAn', // Informe completo — 4,99 €
   bundle: 'price_1U3B48FNpWfaUovU5Mhdvviq', // Pack 3 informes — 9,99 €
+  extra:  'price_1U3ElUFNpWfaUovUJgskIEqi', // Análisis extra (+3 ese día) — 2,99 €
 }
 
 function cors() {
