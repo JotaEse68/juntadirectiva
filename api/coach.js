@@ -38,7 +38,7 @@ function cors(origin) {
   }
 }
 
-async function createClaudeStream({ apiKey, systemPrompt, userPrompt, maxTokens }) {
+async function createClaudeStream({ apiKey, systemPrompt, userPrompt, maxTokens, attachments = [] }) {
   return fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
@@ -46,20 +46,20 @@ async function createClaudeStream({ apiKey, systemPrompt, userPrompt, maxTokens 
       model: 'claude-sonnet-4-6',
       max_tokens: Math.min(maxTokens, 1200),
       system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
+      messages: [{ role: 'user', content: attachments.length ? [{ type: 'text', text: userPrompt }, ...attachments.filter(a => a?.kind === 'image' && /^image\//.test(a.mimeType || '') && a.data?.length < 12_000_000).map(a => ({ type: 'image', source: { type: 'base64', media_type: a.mimeType, data: a.data } }))] : userPrompt }],
       stream: true,
     }),
   })
 }
 
-async function createOpenAIStream({ apiKey, systemPrompt, userPrompt, maxTokens }) {
+async function createOpenAIStream({ apiKey, systemPrompt, userPrompt, maxTokens, attachments = [] }) {
   return fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       max_tokens: Math.min(maxTokens, 1200),
-      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: attachments.length ? [{ type: 'text', text: userPrompt }, ...attachments.filter(a => a?.kind === 'image' && /^image\//.test(a.mimeType || '') && a.data?.length < 12_000_000).map(a => ({ type: 'image_url', image_url: { url: `data:${a.mimeType};base64,${a.data}` } }))] : userPrompt }],
       stream: true,
     }),
   })
@@ -89,7 +89,7 @@ export default async function handler(req) {
   let body
   try { body = await req.json() } catch { return new Response(JSON.stringify({ error: 'JSON inválido' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } }) }
 
-  const { systemPrompt, userPrompt, maxTokens = 800 } = body
+  const { systemPrompt, userPrompt, maxTokens = 800, attachments = [] } = body
   const mode = body.mode === 'premium' ? 'premium' : 'free'
   if (!systemPrompt || !userPrompt) return new Response(JSON.stringify({ error: 'Faltan prompts' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (userPrompt.length > 12000 || systemPrompt.length > 8000) return new Response(JSON.stringify({ error: 'Prompt demasiado largo' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
@@ -104,8 +104,8 @@ export default async function handler(req) {
   let upstreamRes
   try {
     upstreamRes = useOpenAI
-      ? await createOpenAIStream({ apiKey, systemPrompt, userPrompt, maxTokens })
-      : await createClaudeStream({ apiKey, systemPrompt, userPrompt, maxTokens })
+      ? await createOpenAIStream({ apiKey, systemPrompt, userPrompt, maxTokens, attachments })
+      : await createClaudeStream({ apiKey, systemPrompt, userPrompt, maxTokens, attachments })
   } catch {
     return new Response(JSON.stringify({ error: `Error conectando con ${useOpenAI ? 'OpenAI' : 'Anthropic'}` }), { status: 502, headers: { ...c, 'Content-Type': 'application/json' } })
   }
@@ -119,7 +119,7 @@ export default async function handler(req) {
         apiKey: process.env.ANTHROPIC_API_KEY,
         systemPrompt,
         userPrompt,
-        maxTokens,
+        maxTokens, attachments,
       })
     } catch {
       return new Response(JSON.stringify({ error: 'Error conectando con OpenAI y Anthropic' }), { status: 502, headers: { ...c, 'Content-Type': 'application/json' } })

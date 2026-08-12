@@ -20,7 +20,7 @@ export default async function handler(req) {
   let body
   try { body = await req.json() } catch { return new Response(JSON.stringify({ error: 'JSON inválido' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } }) }
 
-  const { apiKey, model = 'gpt-4o-mini', system, userPrompt, maxTokens = 800 } = body
+  const { apiKey, model = 'gpt-4o-mini', system, userPrompt, maxTokens = 800, attachments = [] } = body
   if (!apiKey) return new Response(JSON.stringify({ error: 'Falta la API key de OpenAI' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (!system || !userPrompt) return new Response(JSON.stringify({ error: 'Faltan prompts' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (userPrompt.length > 12000 || system.length > 8000) return new Response(JSON.stringify({ error: 'Prompt demasiado largo' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
@@ -33,7 +33,7 @@ export default async function handler(req) {
       body: JSON.stringify({
         model,
         max_tokens: Math.min(maxTokens, 1200),
-        messages: [{ role: 'system', content: system }, { role: 'user', content: userPrompt }],
+        messages: [{ role: 'system', content: system }, { role: 'user', content: attachments.length ? [{ type: 'text', text: userPrompt }, ...attachments.filter(a => a?.kind === 'image' && /^image\//.test(a.mimeType || '') && a.data?.length < 12_000_000).map(a => ({ type: 'image_url', image_url: { url: `data:${a.mimeType};base64,${a.data}` } }))] : userPrompt }],
         stream: true,
       }),
     })

@@ -1,16 +1,30 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { FREE_CHAT_LIMIT } from '../hooks/useChairmanChat.js'
+import { prepareChatAttachment } from '../lib/chatAttachments.js'
+import { downloadChairmanReplyPdf } from '../lib/reportPdf.js'
 
-export default function ChairmanChat({ messages, sending, error, freeMessagesUsed, hasKey, onSend }) {
+export default function ChairmanChat({ messages, sending, error, freeMessagesUsed, hasKey, premiumAccess, onSend, situation }) {
   const [input, setInput] = useState('')
+  const [attachment, setAttachment] = useState(null)
+  const [attachmentError, setAttachmentError] = useState(null)
+  const fileRef = useRef(null)
 
-  const limitReached = !hasKey && freeMessagesUsed >= FREE_CHAT_LIMIT
-  const canSend = input.trim() && !sending && !limitReached
+  const limitReached = !hasKey && !premiumAccess && freeMessagesUsed >= FREE_CHAT_LIMIT
+  const canSend = (input.trim() || attachment) && !sending && !limitReached
 
   const handleSend = () => {
     if (!canSend) return
-    onSend(input)
+    onSend(input || 'Revisa el material adjunto y dime cómo cambia la decisión.', attachment ? [attachment] : [])
     setInput('')
+    setAttachment(null)
+  }
+
+  const handleAttachment = async event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    try { setAttachment(await prepareChatAttachment(file)); setAttachmentError(null) }
+    catch (err) { setAttachmentError(err.message) }
   }
 
   return (
@@ -20,7 +34,7 @@ export default function ChairmanChat({ messages, sending, error, freeMessagesUse
           <span style={{ fontSize: '16px' }}>💬</span>
           <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--t1)' }}>Pregúntale al Chairman</p>
         </div>
-        {!hasKey && (
+          {!hasKey && !premiumAccess && (
           <span style={{ fontSize: '11px', color: 'var(--t3)' }}>
             {Math.min(freeMessagesUsed, FREE_CHAT_LIMIT)}/{FREE_CHAT_LIMIT} mensajes gratis
           </span>
@@ -42,6 +56,8 @@ export default function ChairmanChat({ messages, sending, error, freeMessagesUse
                 <p style={{ fontSize: '13px', lineHeight: 1.6, color: 'var(--t1)', whiteSpace: 'pre-wrap' }}>
                   {m.content || (sending && i === messages.length - 1 ? '···' : '')}
                 </p>
+                {m.attachments?.length > 0 && <p style={{ marginTop: '6px', fontSize: '10px', color: 'var(--blue)' }}>📎 {m.attachments.join(', ')}</p>}
+                {m.role === 'assistant' && m.content && premiumAccess && <button onClick={() => downloadChairmanReplyPdf({ situation, reply: m.content })} style={{ marginTop: '9px', padding: '6px 9px', borderRadius: '6px', border: '1px solid var(--blue-bd)', background: 'var(--blue-dim)', color: 'var(--blue)', fontSize: '11px', fontWeight: 700 }}>↓ Guardar en PDF</button>}
               </div>
             </div>
           ))}
@@ -54,6 +70,8 @@ export default function ChairmanChat({ messages, sending, error, freeMessagesUse
         </div>
       )}
 
+      {attachmentError && <div style={{ margin: '0 22px', color: 'var(--red)', fontSize: '12px' }}>⚠️ {attachmentError}</div>}
+
       <div style={{ padding: '16px 22px' }}>
         {limitReached ? (
           <div style={{ padding: '12px 16px', background: 'var(--blue-dim)', border: '1px solid var(--blue-bd)', borderRadius: 'var(--r-md)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
@@ -61,7 +79,10 @@ export default function ChairmanChat({ messages, sending, error, freeMessagesUse
             <span style={{ fontSize: '12px', color: 'var(--t3)' }}>Podrás volver a preguntar en la próxima sesión.</span>
           </div>
         ) : (
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div>
+            {premiumAccess && attachment && <div style={{ marginBottom: '8px', display: 'inline-flex', gap: '7px', alignItems: 'center', padding: '6px 9px', border: '1px solid var(--blue-bd)', borderRadius: '7px', background: 'var(--blue-dim)', color: 'var(--blue)', fontSize: '11px' }}>📎 {attachment.name}<button type="button" onClick={() => setAttachment(null)} aria-label="Quitar adjunto" style={{ color: 'var(--blue)', fontSize: '15px' }}>×</button></div>}
+            <div style={{ display: 'flex', gap: '8px' }}>
+            {premiumAccess && <><input ref={fileRef} type="file" accept="image/*,.pdf,.md,.txt" onChange={handleAttachment} hidden /><button type="button" onClick={() => fileRef.current?.click()} disabled={sending} title="Adjuntar imagen, PDF, Markdown o texto" style={{ padding: '11px', border: '1px solid var(--bd)', borderRadius: 'var(--r-sm)', color: 'var(--t2)' }}>📎</button></>}
             <input
               type="text"
               value={input}
@@ -78,6 +99,8 @@ export default function ChairmanChat({ messages, sending, error, freeMessagesUse
             >
               {sending ? '...' : 'Enviar'}
             </button>
+            </div>
+            {!premiumAccess && <p style={{ marginTop: '8px', fontSize: '10px', color: 'var(--t3)' }}>El reanálisis con PDF, Markdown e imágenes y la exportación PDF forman parte de la sesión premium.</p>}
           </div>
         )}
       </div>

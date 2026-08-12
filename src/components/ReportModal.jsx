@@ -1,4 +1,5 @@
 import React from 'react'
+import { downloadExecutiveReportPdf } from '../lib/reportPdf.js'
 
 const KNOWN_HEADERS = [
   'HOJA DE RUTA 30/60/90 DÍAS',
@@ -29,38 +30,9 @@ function parseSections(text) {
   return sections
 }
 
-function buildDownloadText(situation, verdict, report) {
-  const parts = [
-    'JUNTA DIRECTIVA AI — INFORME COMPLETO',
-    '='.repeat(40),
-    '',
-    `SITUACIÓN: ${situation}`,
-    '',
-    'VEREDICTO RÁPIDO',
-    '-'.repeat(20),
-    verdict || '',
-    '',
-    report.text,
-  ]
-  if (report.quickTakes?.length) {
-    parts.push('', 'OPINIONES EXPRÉS DE LOS DEMÁS DIRECTORES', '-'.repeat(20))
-    report.quickTakes.forEach(q => {
-      parts.push(`${q.director.name} (${q.director.title}): ${q.text}`, '')
-    })
-  }
-  return parts.join('\n')
-}
-
 export default function ReportModal({ situation, verdict, report, loading, error, onClose, onUpgrade, upgrading }) {
   const handleDownload = () => {
-    const text = buildDownloadText(situation, verdict, report)
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'informe-junta-directiva.txt'
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadExecutiveReportPdf({ situation, verdict, report })
   }
 
   return (
@@ -157,7 +129,7 @@ export default function ReportModal({ situation, verdict, report, loading, error
             <button onClick={onClose} style={{ flex: 1, padding: '11px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t2)', fontSize: '13px' }}>Cerrar</button>
             {!report.locked && (
               <button onClick={handleDownload} style={{ flex: 2, padding: '11px', borderRadius: 'var(--r-sm)', border: 'none', background: 'var(--blue)', color: 'var(--bg0)', fontSize: '13px', fontWeight: 700 }}>
-                ⬇️ Descargar plan (.txt)
+                ⬇️ Descargar PDF ejecutivo
               </button>
             )}
           </div>

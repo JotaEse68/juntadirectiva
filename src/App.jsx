@@ -20,7 +20,8 @@ import { computeConsensus } from './lib/consensus.js'
 const STORAGE_KEY = 'junta_api_key'
 const STORAGE_PROVIDER_KEY = 'junta_api_provider'
 const CREDITS_KEY = 'junta_report_credits'
-const MAX_CHARS = 800
+const MAX_CHARS = 2000
+const PREMIUM_ACCESS_KEY = 'junta_premium_access'
 // Claves de sessionStorage para sobrevivir la navegación completa de página que hace el
 // redirect a Stripe Checkout — todo el estado de React se pierde en ese salto, así que lo
 // que haga falta para retomar la sesión al volver se guarda aquí justo antes de redirigir.
@@ -51,6 +52,8 @@ export default function App() {
   const [gateError, setGateError] = useState(null)
   const [gateChecking, setGateChecking] = useState(false)
   const [buyingExtra, setBuyingExtra] = useState(false)
+  const [boardMode, setBoardMode] = useState('fast')
+  const [premiumAccess, setPremiumAccess] = useState(() => localStorage.getItem(PREMIUM_ACCESS_KEY) === 'true')
 
   useEffect(() => {
     if (!showPrivateAccess) return
@@ -119,6 +122,8 @@ export default function App() {
             setCheckoutError('El pago se confirmó pero no se pudo activar. Contacta soporte.')
           }
         } else {
+          localStorage.setItem(PREMIUM_ACCESS_KEY, 'true')
+          setPremiumAccess(true)
           addReportCredits(data.product === 'bundle' ? 3 : 1)
           // Si esta compra viene del CTA de "informe completo" dentro de un debate ya
           // terminado, retoma ese contexto y gasta el crédito recién añadido de inmediato
@@ -179,8 +184,8 @@ export default function App() {
     }
   }
 
-  const handleSendChat = (text) => {
-    sendChatMessage(text, { situation, activeDirectors, directorStates, verdict }, { apiKey: apiKey || null, provider: apiProvider })
+  const handleSendChat = (text, attachments = []) => {
+    sendChatMessage(text, attachments, { situation, activeDirectors, directorStates, verdict }, { apiKey: apiKey || null, provider: apiProvider })
   }
 
   const toggleDirector = (id) => {
@@ -226,8 +231,8 @@ export default function App() {
 
     const directors = orderForDebate(selectedIds, DIRECTORS)
     const effectiveSituation = writtenSituation || `Analiza el proyecto descrito en los documentos y fuentes de apoyo.\n\n${contextBrief}`
-    await conveneBoard({ directors, situation: effectiveSituation, meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider })
-  }, [situation, meetingType, selectedIds, apiKey, apiProvider, isIdle, conveneBoard, buildContextBlock, buildSituationBrief])
+    await conveneBoard({ directors, situation: effectiveSituation, meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider, mode: boardMode })
+  }, [situation, meetingType, selectedIds, apiKey, apiProvider, boardMode, isIdle, conveneBoard, buildContextBlock, buildSituationBrief])
 
   const handleBuyExtra = async () => {
     setCheckoutError(null)
@@ -303,7 +308,7 @@ export default function App() {
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {isRunning && (
             <span style={{ fontSize: '12px', color: 'var(--blue)', padding: '4px 12px', borderRadius: '20px', background: 'var(--blue-dim)', border: '1px solid var(--blue-bd)' }}>
-              {phase === 'convening' ? 'Convocando...' : phase === 'debating' ? (isPaused ? `Pausado · ${doneCount}/${totalCount}` : `Debate · ${doneCount}/${totalCount}`) : 'Emitiendo veredicto...'}
+              {phase === 'convening' ? 'Convocando...' : phase === 'debating' ? (isPaused ? `Pausado · ${doneCount}/${totalCount}` : `Junta trabajando · ${doneCount}/${totalCount}`) : phase === 'contrasting' ? 'Contrastando hallazgos...' : 'Emitiendo veredicto...'}
             </span>
           )}
           {phase === 'debating' && (
@@ -381,11 +386,9 @@ export default function App() {
                   )
                 })}
               </div>
-              {selectedIds.length > 8 && (
-                <p style={{ fontSize: '11px', color: 'var(--t3)', textAlign: 'center', marginTop: '10px' }}>
-                  El debate es secuencial (cada director escucha a los anteriores) — con {selectedIds.length} directores puede tardar varios minutos.
-                </p>
-              )}
+              <p style={{ fontSize: '11px', color: 'var(--t3)', textAlign: 'center', marginTop: '10px' }}>
+                {boardMode === 'fast' ? 'La Junta rápida conecta perspectivas en paralelo y luego las contrasta.' : 'La Junta profunda deja que cada director responda a los argumentos anteriores.'}
+              </p>
             </div>
 
             {/* Formulario */}
@@ -407,9 +410,12 @@ export default function App() {
               <div className="situation-field">
                 <p style={{ fontSize: '11px', color: 'var(--blue)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '10px', fontWeight: 700 }}>¿Qué decisión necesitas tomar?</p>
                 <textarea
+                  id="board-situation"
                   value={situation}
                   onChange={e => setSituation(e.target.value.slice(0, MAX_CHARS))}
                   placeholder="Describe la situación con contexto, o adjunta un documento de apoyo debajo. Cuánto más específico seas, más útil será el análisis."
+                  maxLength={MAX_CHARS}
+                  aria-describedby="board-situation-hint board-situation-count"
                   rows={5}
                   style={{ width: '100%', padding: '16px', background: 'var(--bg3)', border: '1px solid var(--bd)', borderRadius: 'var(--r-md)', color: 'var(--t1)', fontSize: '15px', lineHeight: 1.7, resize: 'vertical', outline: 'none', transition: 'border-color .2s', minHeight: '130px' }}
                   onFocus={e => e.target.style.borderColor = 'var(--blue-bd)'}
@@ -417,8 +423,8 @@ export default function App() {
                   onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) handleConvene() }}
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--t3)' }}>⌘+Enter para convocar</span>
-                  <span style={{ fontSize: '11px', color: 'var(--t3)' }}>{situation.length}/{MAX_CHARS}</span>
+                  <span id="board-situation-hint" style={{ fontSize: '11px', color: 'var(--t3)' }}>⌘+Enter para convocar</span>
+                  <span id="board-situation-count" style={{ fontSize: '11px', color: 'var(--t3)' }}>{situation.length}/{MAX_CHARS}</span>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px', marginTop: '12px' }}>
                   {[
@@ -433,6 +439,15 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              <fieldset style={{ border: 0, padding: 0 }}>
+                <legend style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '10px', fontWeight: 500 }}>Ritmo de deliberación</legend>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
+                  <button type="button" onClick={() => setBoardMode('fast')} aria-pressed={boardMode === 'fast'} style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', border: `1px solid ${boardMode === 'fast' ? 'var(--blue-bd)' : 'var(--bd)'}`, background: boardMode === 'fast' ? 'var(--blue-dim)' : 'var(--bg3)', color: 'var(--t1)', textAlign: 'left' }}><strong style={{ fontSize: '13px', color: 'var(--blue)' }}>Junta rápida</strong><span style={{ display: 'block', marginTop: '3px', fontSize: '11px', color: 'var(--t2)' }}>Perspectivas paralelas + contraste.</span></button>
+                  <button type="button" onClick={() => (premiumAccess || apiKey || privateAccess) && setBoardMode('deep')} aria-pressed={boardMode === 'deep'} style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', border: `1px solid ${boardMode === 'deep' ? 'var(--blue-bd)' : 'var(--bd)'}`, background: boardMode === 'deep' ? 'var(--blue-dim)' : 'var(--bg3)', color: 'var(--t1)', textAlign: 'left', opacity: premiumAccess || apiKey || privateAccess ? 1 : .62 }}><strong style={{ fontSize: '13px', color: 'var(--blue)' }}>Junta profunda {!(premiumAccess || apiKey || privateAccess) && '· Premium'}</strong><span style={{ display: 'block', marginTop: '3px', fontSize: '11px', color: 'var(--t2)' }}>Cada director escucha y rebate a los anteriores.</span></button>
+                </div>
+                {!(premiumAccess || apiKey || privateAccess) && <p style={{ marginTop: '7px', fontSize: '11px', color: 'var(--t3)' }}>La Junta profunda se activa con tu API propia o al desbloquear el informe premium.</p>}
+              </fieldset>
 
               {/* Panel de contexto enriquecido */}
               <div className="context-field">
@@ -474,6 +489,18 @@ export default function App() {
               <p style={{ fontSize: '12px', color: 'var(--t3)', textAlign: 'center' }}>🌐 Modo gratuito · 2 análisis/día</p>
             </div>
 
+            <section className="board-overview fade-up" aria-labelledby="overview-title" style={{ animationDelay: '.18s' }}>
+              <div>
+                <p className="eyebrow">Lo que ocurre después</p>
+                <h2 id="overview-title">Una decisión no termina en el veredicto.</h2>
+              </div>
+              <ol className="board-overview__steps">
+                <li><span>01</span><div><strong>La junta la cuestiona</strong><p>Especialistas revelan puntos ciegos y caminos alternativos.</p></div></li>
+                <li><span>02</span><div><strong>El Chairman le da dirección</strong><p>Una decisión clara, sus condiciones y próximos pasos.</p></div></li>
+                <li><span>03</span><div><strong>Tú puedes cambiar su rumbo</strong><p>Rebate, añade evidencia y convierte cada ajuste en un PDF ejecutivo.</p></div></li>
+              </ol>
+            </section>
+
           </div>
         )}
 
@@ -484,7 +511,7 @@ export default function App() {
             <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: '11px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 500 }}>
-                  {phase === 'convening' ? 'Convocando junta...' : phase === 'debating' ? `Debate en curso · ${doneCount}/${totalCount}` : phase === 'verdict' ? 'Emitiendo veredicto...' : 'Sesión completada'}
+                  {phase === 'convening' ? 'Convocando junta...' : phase === 'debating' ? `La junta está conectando perspectivas · ${doneCount}/${totalCount}` : phase === 'contrasting' ? 'Contrastando hallazgos antes del veredicto...' : phase === 'verdict' ? 'El Chairman está integrando la decisión...' : 'Sesión completada'}
                 </p>
                 <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: '22px', fontWeight: 400, color: 'var(--t1)', lineHeight: 1.3, maxWidth: '580px', fontStyle: 'italic' }}>
                   "{situation.slice(0, 110)}{situation.length > 110 ? '…' : ''}"
@@ -537,13 +564,23 @@ export default function App() {
 
             {/* Chat de seguimiento con el Chairman — después del veredicto */}
             {isDone && verdict && (
+              <section style={{ marginBottom: '16px', padding: '18px 20px', border: '1px solid var(--blue-bd)', borderRadius: 'var(--r-md)', background: 'linear-gradient(135deg, var(--blue-dim), rgba(35,190,174,.08))' }} aria-labelledby="chairman-feature-title">
+                <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: '5px' }}>La decisión continúa</p>
+                <h3 id="chairman-feature-title" style={{ fontSize: '17px', color: 'var(--t1)', marginBottom: '6px' }}>El veredicto es el inicio de la sesión de trabajo.</h3>
+                <p style={{ fontSize: '13px', color: 'var(--t2)', lineHeight: 1.55 }}>Rebate supuestos, compara alternativas, añade nueva evidencia y convierte cada propuesta refinada en un PDF.</p>
+              </section>
+            )}
+
+            {isDone && verdict && (
               <ChairmanChat
                 messages={chatMessages}
                 sending={chatSending}
                 error={chatError}
                 freeMessagesUsed={freeMessagesUsed}
                 hasKey={!!apiKey}
+                premiumAccess={premiumAccess || !!apiKey || privateAccess}
                 onSend={handleSendChat}
+                situation={situation}
               />
             )}
 
@@ -559,8 +596,9 @@ export default function App() {
 
         <DirectorsRoster directors={DIRECTORS} onClickDirector={setSelectedDirector} />
 
-        <footer style={{ marginTop: '48px', paddingTop: '24px', borderTop: '1px solid var(--bd)', textAlign: 'center' }}>
-          <p style={{ fontSize: '11px', color: 'var(--t3)' }}>Junta Directiva AI · 12 expertos · Powered by Claude, OpenAI o Gemini · 2026</p>
+        <footer className="site-footer" aria-label="Información del sitio">
+          <div className="site-footer__topline"><div><p className="site-footer__product">Junta Directiva AI · Una experiencia de IA Packs Plugin Suite™</p><p className="site-footer__tagline">© 2026 Quintessence Consulting Group LLC · Creado por Jota Santos</p></div><nav className="site-footer__links" aria-label="Enlaces del creador"><a href="https://jsantos.pro/" target="_blank" rel="noreferrer">Jota Santos</a><a href="https://iapacks.com/" target="_blank" rel="noreferrer">IA Packs</a></nav></div>
+          <details className="site-footer__legal"><summary>Aviso legal y uso responsable</summary><div className="site-footer__legal-copy"><p><strong>Descargo de responsabilidad:</strong> Junta Directiva AI apoya decisiones con IA generativa; no ofrece asesoramiento legal, financiero, médico, fiscal ni profesional y no garantiza resultados.</p><p><strong>Uso responsable:</strong> Verifica el contenido generado antes de actuar y no aportes datos confidenciales, personales o de terceros sin derecho a hacerlo.</p><p><strong>Derechos:</strong> La marca, lógica de producto, documentación y arquitectura están protegidas. Se prohíbe su extracción, reventa o distribución no autorizada.</p></div></details>
         </footer>
       </main>
 

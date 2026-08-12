@@ -27,23 +27,24 @@ export function useChairmanChat() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
 
-  const sendMessage = useCallback(async (text, sessionContext, { apiKey, provider }) => {
+  const sendMessage = useCallback(async (text, attachments = [], sessionContext, { apiKey, provider }) => {
     const question = text.trim()
     if (!question) return
 
     setSending(true)
     setError(null)
-    setMessages(prev => [...prev, { role: 'user', content: question }, { role: 'assistant', content: '' }])
+    setMessages(prev => [...prev, { role: 'user', content: question, attachments: attachments.map(a => a.name) }, { role: 'assistant', content: '' }])
 
     try {
       const system = buildChairmanSystem(sessionContext)
       const history = messages.map(m => `${m.role === 'user' ? 'Usuario' : 'Roberto'}: ${m.content}`).join('\n\n')
+      const attachmentContext = attachments.filter(a => a.kind === 'text').map(a => `\n\nADJUNTO: ${a.name}\n${a.text}`).join('')
       const userMsg = history
         ? `${history}\n\nUsuario: ${question}\n\nResponde como Roberto.`
         : `Usuario: ${question}\n\nResponde como Roberto.`
 
       const reply = await streamCompletion({
-        provider, apiKey, system, userMsg, maxTokens: 500,
+        provider, apiKey, system, userMsg: userMsg + attachmentContext, maxTokens: 700, attachments,
         onChunk: (partial) => {
           setMessages(prev => {
             const next = prev.slice()

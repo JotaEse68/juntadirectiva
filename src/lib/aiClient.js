@@ -3,21 +3,21 @@ import { PROVIDERS } from './providers.js'
 // Arma la petición según el proveedor. Claude permite llamada directa desde el navegador;
 // OpenAI y Gemini bloquean CORS, así que se reenvían por nuestro propio proxy (/api/openai, /api/gemini)
 // que solo pasa la key del usuario sin guardarla.
-function buildRequest({ provider, apiKey, system, userMsg, maxTokens }) {
+function buildRequest({ provider, apiKey, system, userMsg, maxTokens, attachments = [] }) {
   const model = PROVIDERS[provider]?.model
 
   if (provider === 'openai') {
     return {
       endpoint: '/api/openai',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey, model, system, userPrompt: userMsg, maxTokens }),
+      body: JSON.stringify({ apiKey, model, system, userPrompt: userMsg, maxTokens, attachments }),
     }
   }
   if (provider === 'gemini') {
     return {
       endpoint: '/api/gemini',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey, model, system, userPrompt: userMsg, maxTokens }),
+      body: JSON.stringify({ apiKey, model, system, userPrompt: userMsg, maxTokens, attachments }),
     }
   }
   // Claude con key propia: directo a Anthropic
@@ -29,7 +29,7 @@ function buildRequest({ provider, apiKey, system, userMsg, maxTokens }) {
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-    body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: userMsg }], stream: true }),
+    body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: attachments.length ? [{ type: 'text', text: userMsg }, ...attachments.filter(a => a.kind === 'image').map(a => ({ type: 'image', source: { type: 'base64', media_type: a.mimeType, data: a.data } }))] : userMsg }], stream: true }),
   }
 }
 
@@ -43,10 +43,10 @@ function extractDelta(provider, parsed) {
 
 // Llamada genérica con streaming. Sin API propia el servidor elige el modelo según el modo:
 // GPT-4o mini para análisis gratis y Claude Sonnet para el plan premium.
-export async function streamCompletion({ provider, apiKey, system, userMsg, maxTokens, onChunk, serverMode = 'free' }) {
+export async function streamCompletion({ provider, apiKey, system, userMsg, maxTokens, onChunk, serverMode = 'free', attachments = [] }) {
   const req = apiKey
-    ? buildRequest({ provider, apiKey, system, userMsg, maxTokens })
-    : { endpoint: '/api/coach', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemPrompt: system, userPrompt: userMsg, maxTokens, mode: serverMode }) }
+    ? buildRequest({ provider, apiKey, system, userMsg, maxTokens, attachments })
+    : { endpoint: '/api/coach', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemPrompt: system, userPrompt: userMsg, maxTokens, mode: serverMode, attachments }) }
 
   const res = await fetch(req.endpoint, { method: 'POST', headers: req.headers, body: req.body })
   if (!res.ok) {

@@ -33,7 +33,16 @@ Como ${director.name} (${director.title}), da tu análisis experto y posición. 
 }
 
 // Llama al Chairman para el veredicto final basado en todos los análisis
-async function callVerdict({ situation, meetingType, contextBlock, responses, apiKey, provider }) {
+async function callContrast({ situation, responses, apiKey, provider }) {
+  const summaries = responses.map(r => `${r.director.name}: ${excerpt(r.text, 500)}`).join('\n\n')
+  return streamCompletion({
+    provider, apiKey, maxTokens: 350,
+    system: 'Eres el moderador de una junta directiva. Contrasta las perspectivas recibidas: identifica dos acuerdos, una tensión real y qué evidencia decidiría entre alternativas. Sé concreto y no inventes datos.',
+    userMsg: `SITUACIÓN:\n${situation}\n\nPERSPECTIVAS INICIALES:\n${summaries}`,
+  })
+}
+
+async function callVerdict({ situation, meetingType, contextBlock, responses, contrast = '', apiKey, provider }) {
   const summaries = responses
     .map(r => `${r.director.name} (${r.director.title}):\n${r.text}`)
     .join('\n\n---\n\n')
@@ -56,6 +65,8 @@ ${contextBlock ? `CONTEXTO DE APOYO YA LEÍDO:\n${contextBlock}\n` : ''}
 ANÁLISIS DE LOS DIRECTORES:
 ${summaries}
 
+${contrast ? `RONDA DE CONTRASTE:\n${contrast}\n` : ''}
+
 Sintetiza el debate y emite el veredicto final de la junta.`
 
   return streamCompletion({ provider, apiKey, system: verdictSystem, userMsg: verdictMsg, maxTokens: 600 })
@@ -66,7 +77,7 @@ export function useBoard() {
   const [directorStates, setDirectorStates] = useState({})
   const [verdict, setVerdict] = useState(null)
   const [verdictLoading, setVerdictLoading] = useState(false)
-  const [phase, setPhase] = useState('idle') // idle | convening | debating | verdict | done
+  const [phase, setPhase] = useState('idle') // idle | convening | debating | contrasting | verdict | done
   const [activeDirectors, setActiveDirectors] = useState([])
   const [rateLimitInfo, setRateLimitInfo] = useState(null)
   const [globalError, setGlobalError] = useState(null)
@@ -95,7 +106,7 @@ export function useBoard() {
   }, [])
 
   // `directors` viene ya resuelto y ordenado desde fuera (selección automática + overrides del usuario)
-  const conveneBoard = useCallback(async ({ directors, situation, meetingType, contextBlock, apiKey, provider }) => {
+  const conveneBoard = useCallback(async ({ directors, situation, meetingType, contextBlock, apiKey, provider, mode = 'fast' }) => {
     const selected = directors
     setActiveDirectors(selected)
     setDirectorStates({})
@@ -111,10 +122,8 @@ export function useBoard() {
     await new Promise(r => setTimeout(r, 600)) // pequeña pausa dramática
     setPhase('debating')
 
-    // Debate secuencial: cada director habla después de escuchar a los anteriores,
-    // para que puedan reaccionar y referenciarse entre sí de verdad.
     const debateSoFar = []
-    for (const director of selected) {
+    const runDirector = async director => {
       await waitIfPaused()
       setDirectorStates(prev => ({ ...prev, [director.id]: { status: 'streaming', text: '' } }))
 
@@ -145,11 +154,28 @@ export function useBoard() {
       }
     }
 
+    if (mode === 'deep') {
+      // Máxima calidad: cada especialista recibe el hilo ya construido.
+      for (const director of selected) await runDirector(director)
+    } else {
+      // Rapidez legible: tandas pequeñas evitan saturar el proveedor del usuario.
+      for (let index = 0; index < selected.length; index += 3) {
+        await waitIfPaused()
+        await Promise.all(selected.slice(index, index + 3).map(director => runDirector(director)))
+      }
+    }
+
     const successful = debateSoFar
 
     if (successful.length === 0) {
       setPhase('idle')
       return
+    }
+
+    let contrast = ''
+    if (mode === 'fast' && successful.length > 1) {
+      setPhase('contrasting')
+      try { contrast = await callContrast({ situation, responses: successful, apiKey: apiKey || null, provider: provider || 'claude' }) } catch { /* el Chairman puede sintetizar sin esta ronda */ }
     }
 
     // Veredicto del Chairman
@@ -161,6 +187,7 @@ export function useBoard() {
         meetingType,
         contextBlock: contextBlock || '',
         responses: successful,
+        contrast,
         apiKey: apiKey || null,
         provider: provider || 'claude',
       })
