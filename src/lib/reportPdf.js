@@ -1,5 +1,3 @@
-import { jsPDF } from 'jspdf'
-
 const NAVY = [6, 13, 31]
 const BLUE = [56, 182, 255]
 const TEAL = [35, 190, 174]
@@ -14,7 +12,8 @@ function splitSections(text = '') {
   return String(text).split(/\n(?=[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ /0-9]{4,}$)/m).filter(Boolean)
 }
 
-export function downloadExecutiveReportPdf({ situation, verdict, report }) {
+export async function downloadExecutiveReportPdf({ situation, verdict, report }) {
+  const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
   const margin = 18
   const width = 210 - margin * 2
@@ -74,6 +73,6 @@ export function downloadExecutiveReportPdf({ situation, verdict, report }) {
   doc.save('junta-directiva-informe-ejecutivo.pdf')
 }
 
-export function downloadChairmanReplyPdf({ situation, reply }) {
-  downloadExecutiveReportPdf({ situation, verdict: 'Propuesta refinada durante la sesión de trabajo con el Chairman.', report: { text: `ACCIONES PRIORITARIAS\n${reply}`, quickTakes: [] } })
+export async function downloadChairmanReplyPdf({ situation, reply }) {
+  await downloadExecutiveReportPdf({ situation, verdict: 'Propuesta refinada durante la sesión de trabajo con el Chairman.', report: { text: `ACCIONES PRIORITARIAS\n${reply}`, quickTakes: [] } })
 }

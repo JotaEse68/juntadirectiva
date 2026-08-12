@@ -39,7 +39,7 @@ export default function App() {
   const [privateAccess, setPrivateAccess] = useState(false)
   const [showPrivateAccess, setShowPrivateAccess] = useState(() => window.location.pathname === '/acceso-privado')
 
-  const { conveneBoard, reset, pause, resume, directorStates, verdict, verdictLoading, phase, activeDirectors, globalError, isPaused } = useBoard()
+  const { conveneBoard, reset, retry, clearHistory, restoredSession, pause, resume, directorStates, verdict, verdictLoading, phase, activeDirectors, globalError, isPaused } = useBoard()
   const { items: ctxItems, addNote, processFile, processURL, removeItem: removeCtxItem,
           buildContextBlock, buildSituationBrief, hasContext, isProcessing: ctxProcessing } = useContextBuilder()
   const { report, loading: reportLoading, error: reportError, generateReport, reset: resetReport } = useReport()
@@ -54,6 +54,20 @@ export default function App() {
   const [buyingExtra, setBuyingExtra] = useState(false)
   const [boardMode, setBoardMode] = useState('fast')
   const [premiumAccess, setPremiumAccess] = useState(() => localStorage.getItem(PREMIUM_ACCESS_KEY) === 'true')
+  const [online, setOnline] = useState(() => navigator.onLine)
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine)
+    window.addEventListener('online', update); window.addEventListener('offline', update)
+    return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update) }
+  }, [])
+
+  useEffect(() => {
+    if (!restoredSession?.situation) return
+    setSituation(restoredSession.situation)
+    setMeetingType(restoredSession.meetingType || 'decision')
+    if (restoredSession.directors?.length) setSelectedIds(restoredSession.directors.map(d => d.id))
+  }, [restoredSession])
 
   useEffect(() => {
     if (!showPrivateAccess) return
@@ -268,6 +282,9 @@ export default function App() {
     setApiKey(key)
     setApiProvider(key ? provider : 'claude')
   }
+  const handleDeleteSession = () => {
+    clearHistory(); resetReport(); resetChat(); setShowReport(false); setSituation(''); setGateError(null)
+  }
   const handlePrivateGranted = () => {
     setPrivateAccess(true)
     setShowPrivateAccess(false)
@@ -474,6 +491,8 @@ export default function App() {
                 />
               </div>
 
+              <p style={{ marginTop: '-12px', fontSize: '11px', color: 'var(--t3)', lineHeight: 1.55 }}>Privacidad: los documentos se usan para esta deliberación. La última junta se conserva 24 horas únicamente en este navegador; no guardamos adjuntos en ese historial.</p>
+
               <button
                 onClick={handleConvene}
                 disabled={(!situation.trim() && !hasContext) || ctxProcessing || gateChecking || selectedIds.length === 0}
@@ -507,6 +526,7 @@ export default function App() {
         {/* ── DEBATE / RESULTADOS ── */}
         {(isRunning || isDone) && (
           <div>
+            {!online && <div role="alert" style={{ marginBottom: '18px', padding: '13px 16px', borderLeft: '2px solid var(--amber)', background: 'rgba(245,180,60,.08)', color: 'var(--t2)', fontSize: '13px' }}>⚠️ Estás sin conexión. La junta conserva los resultados ya recibidos; vuelve a conectarte y pulsa Reintentar.</div>}
             {/* Header sesión */}
             <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
               <div style={{ flex: 1 }}>
@@ -517,17 +537,14 @@ export default function App() {
                   "{situation.slice(0, 110)}{situation.length > 110 ? '…' : ''}"
                 </h2>
               </div>
-              {isDone && (
-                <button onClick={handleReset} style={{ padding: '9px 18px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t2)', fontSize: '13px', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  Nueva sesión
-                </button>
-              )}
+              {isDone && <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}><button onClick={handleReset} style={{ padding: '9px 18px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t2)', fontSize: '13px', whiteSpace: 'nowrap', flexShrink: 0 }}>Nueva sesión</button><button onClick={handleDeleteSession} style={{ padding: '9px 12px', borderRadius: 'var(--r-sm)', border: '1px solid var(--red-bd)', color: 'var(--red)', fontSize: '12px' }}>Eliminar sesión</button></div>}
             </div>
 
             {/* Error */}
             {globalError && (
               <div style={{ padding: '14px 18px', background: 'var(--red-dim)', border: '1px solid var(--red-bd)', borderRadius: 'var(--r-md)', color: 'var(--red)', fontSize: '13px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                 <span>⚠️ {globalError}</span>
+                <button onClick={retry} style={{ color: 'var(--red)', textDecoration: 'underline', fontWeight: 700 }}>Reintentar</button>
               </div>
             )}
 
@@ -536,8 +553,10 @@ export default function App() {
               <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '18px', fontWeight: 500 }}>
                 La conversación · clic en un director para ver su perfil
               </p>
-              <DebateChat directors={activeDirectors} directorStates={directorStates} onClickDirector={setSelectedDirector} />
+              <DebateChat directors={activeDirectors} directorStates={directorStates} phase={phase} onClickDirector={setSelectedDirector} />
             </div>
+
+            {Object.values(directorStates).some(state => state.status === 'error') && doneCount > 0 && <p style={{ margin: '-12px 0 24px', padding: '11px 14px', borderLeft: '2px solid var(--amber)', background: 'rgba(245,180,60,.08)', color: 'var(--t2)', fontSize: '12px', lineHeight: 1.5 }}>Algunos especialistas no pudieron responder. El Chairman seguirá trabajando con las aportaciones disponibles y entregará un resultado parcial útil.</p>}
 
             {/* Veredicto — la conclusión, al final de la conversación */}
             {(verdict || verdictLoading) && (
@@ -589,6 +608,7 @@ export default function App() {
                 <button onClick={handleReset} style={{ padding: '13px 32px', borderRadius: 'var(--r-md)', border: '1px solid var(--blue-bd)', background: 'var(--blue-dim)', color: 'var(--blue)', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
                   🏛️ Nueva sesión de junta
                 </button>
+                <p style={{ marginTop: '14px', fontSize: '11px', color: 'var(--t3)', lineHeight: 1.5 }}>Privacidad: esta junta se conserva solo 24 horas en este navegador. Los adjuntos no se guardan en el historial. Puedes eliminarla arriba cuando quieras.</p>
               </div>
             )}
           </div>

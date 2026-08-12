@@ -72,12 +72,17 @@ function Bubble({ director, state, onClick }) {
   )
 }
 
-export default function DebateChat({ directors, directorStates, onClickDirector }) {
+export default function DebateChat({ directors, directorStates, phase = 'debating', onClickDirector }) {
   const started = directors.filter(d => ['streaming', 'done', 'error'].includes(directorStates[d.id]?.status))
   const pending = directors.filter(d => (directorStates[d.id]?.status || 'pending') === 'pending')
+  const done = directors.length - pending.length - directors.filter(d => directorStates[d.id]?.status === 'streaming').length
+  const estimate = phase === 'contrasting' ? '~15 s' : phase === 'verdict' ? '~20 s' : `~${Math.max(10, Math.ceil(Math.max(pending.length, 1) / 3) * 18)} s`
 
   return (
     <div>
+      {phase !== 'done' && <div role="status" aria-live="polite" style={{ marginBottom: '16px', padding: '11px 14px', borderLeft: '2px solid var(--blue)', background: 'var(--blue-dim)', color: 'var(--t2)', fontSize: '12px' }}>
+        {phase === 'contrasting' ? 'La junta está contrastando sus hallazgos.' : phase === 'verdict' ? 'El Chairman está sintetizando la decisión.' : `Especialistas trabajando en paralelo · ${Math.max(done, 0)}/${directors.length}` } <span style={{ color: 'var(--blue)' }}>· estimado {estimate}</span>
+      </div>}
       {started.map(d => (
         <Bubble key={d.id} director={d} state={directorStates[d.id]} onClick={() => onClickDirector(d)} />
       ))}

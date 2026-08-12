@@ -1,6 +1,16 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { MEETING_TYPES, MEETING_FRAMING } from '../lib/directors.js'
 import { streamCompletion } from '../lib/aiClient.js'
+
+const HISTORY_KEY = 'junta-paid-last-session'
+const HISTORY_TTL = 24 * 60 * 60 * 1000
+
+function loadHistory() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || 'null')
+    return saved && Date.now() - saved.savedAt < HISTORY_TTL ? saved : null
+  } catch { return null }
+}
 
 // Recorta la intervención de un director ya cerrado a un resumen corto para que el
 // contexto del debate no crezca sin control a medida que hablan más directores.
@@ -73,12 +83,13 @@ Sintetiza el debate y emite el veredicto final de la junta.`
 }
 
 export function useBoard() {
+  const savedRef = useRef(loadHistory())
   // Estado por director: { id, status: 'pending'|'streaming'|'done'|'error', text, error }
-  const [directorStates, setDirectorStates] = useState({})
-  const [verdict, setVerdict] = useState(null)
+  const [directorStates, setDirectorStates] = useState(() => savedRef.current?.directorStates || {})
+  const [verdict, setVerdict] = useState(() => savedRef.current?.verdict || null)
   const [verdictLoading, setVerdictLoading] = useState(false)
-  const [phase, setPhase] = useState('idle') // idle | convening | debating | contrasting | verdict | done
-  const [activeDirectors, setActiveDirectors] = useState([])
+  const [phase, setPhase] = useState(() => savedRef.current?.verdict ? 'done' : 'idle') // idle | convening | debating | contrasting | verdict | done
+  const [activeDirectors, setActiveDirectors] = useState(() => savedRef.current?.activeDirectors || [])
   const [rateLimitInfo, setRateLimitInfo] = useState(null)
   const [globalError, setGlobalError] = useState(null)
   const [isPaused, setIsPaused] = useState(false)
@@ -87,6 +98,17 @@ export function useBoard() {
   // nunca se pierde contenido ya generado — solo se retiene el arranque del siguiente turno.
   const pausedRef = useRef(false)
   const resumeSignalRef = useRef(null)
+  const lastRequestRef = useRef(savedRef.current?.request || null)
+
+  useEffect(() => {
+    if (!verdict || phase !== 'done') return
+    // Never persist a user's provider key. The restored board is readable,
+    // but a fresh retry after reload asks for the key again when needed.
+    const { apiKey, ...safeRequest } = lastRequestRef.current || {}
+    const saved = { savedAt: Date.now(), request: safeRequest, directorStates, verdict, activeDirectors }
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(saved))
+    savedRef.current = saved
+  }, [verdict, phase, directorStates, activeDirectors])
 
   const waitIfPaused = useCallback(() => {
     if (!pausedRef.current) return Promise.resolve()
@@ -107,6 +129,7 @@ export function useBoard() {
 
   // `directors` viene ya resuelto y ordenado desde fuera (selección automática + overrides del usuario)
   const conveneBoard = useCallback(async ({ directors, situation, meetingType, contextBlock, apiKey, provider, mode = 'fast' }) => {
+    lastRequestRef.current = { directors, situation, meetingType, contextBlock, apiKey, provider, mode }
     const selected = directors
     setActiveDirectors(selected)
     setDirectorStates({})
@@ -168,6 +191,7 @@ export function useBoard() {
     const successful = debateSoFar
 
     if (successful.length === 0) {
+      setGlobalError('La junta no pudo conectar con el proveedor de IA. Comprueba la conexión o vuelve a intentarlo.')
       setPhase('idle')
       return
     }
@@ -213,8 +237,19 @@ export function useBoard() {
     setGlobalError(null)
   }, [])
 
+  const retry = useCallback(() => {
+    if (!lastRequestRef.current) return
+    return conveneBoard(lastRequestRef.current)
+  }, [conveneBoard])
+
+  const clearHistory = useCallback(() => {
+    localStorage.removeItem(HISTORY_KEY)
+    savedRef.current = null
+    reset()
+  }, [reset])
+
   return {
-    conveneBoard, reset, pause, resume,
+    conveneBoard, reset, retry, clearHistory, restoredSession: savedRef.current?.request || null, pause, resume,
     directorStates, verdict, verdictLoading,
     phase, activeDirectors, rateLimitInfo, globalError, isPaused,
   }
