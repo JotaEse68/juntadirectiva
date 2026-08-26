@@ -357,11 +357,31 @@ export default function App() {
                 Tu junta directiva · 12 expertos
               </p>
               <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 'clamp(34px, 5vw, 58px)', fontWeight: 400, lineHeight: 1.1, marginBottom: '18px', color: 'var(--t1)' }}>
-                Antes de decidir,<br /><em style={{ color: 'var(--blue)' }}>convoca la junta.</em>
+                Nadie te avisó que ser tu propio jefe era <em style={{ color: 'var(--blue)' }}>discutir contigo mismo</em> a las 2 de la mañana.
               </h1>
               <p style={{ fontSize: '16px', color: 'var(--t2)', maxWidth: '480px', margin: '0 auto', lineHeight: 1.7 }}>
-                Las grandes empresas no deciden a ciegas: se rodean de una junta que cuestiona, contrasta y exige claridad. Ahora tú también. Convoca a 12 especialistas para convertir una decisión difícil en una dirección clara.
+                Eres el CEO, el vendedor, el que factura y el que limpia la oficina — todo el mismo día. No tienes con quién pensar en voz alta, ni presupuesto para pagar que alguien te lo diga claro. Por eso existe esto: 12 especialistas que no vienen a impresionarte con powerpoints, sino a ayudarte a decidir rápido, gastar poco y no quemarte en el intento.
               </p>
+            </div>
+
+            {/* Franja de "dolores reales" del solopreneur, resueltos en una línea cada uno —
+                da cuerpo al hero sin convertirlo en un muro de texto único. */}
+            <div className="fade-up" style={{
+              order: 1, marginBottom: '36px', display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '16px',
+              maxWidth: '760px', marginLeft: 'auto', marginRight: 'auto',
+            }}>
+              {[
+                { emoji: '😮‍💨', title: 'La soledad de decidir solo', body: 'Aquí discutes la decisión antes de tomarla, no después de arrepentirte.' },
+                { emoji: '🌀', title: 'La indigestión de ideas', body: 'Te dicen qué NO hacer esta semana, no solo qué sí.' },
+                { emoji: '💶', title: 'El miedo a gastar mal', body: 'Todo se mide en tu dinero real y tus horas reales — nunca en cifras inventadas.' },
+              ].map((p, i) => (
+                <div key={i} style={{ textAlign: 'center', padding: '20px 16px', border: '1px solid var(--bd)', borderRadius: 'var(--r-md)', background: 'rgba(255,255,255,0.02)' }}>
+                  <div style={{ fontSize: '22px', marginBottom: '10px' }}>{p.emoji}</div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--t1)', marginBottom: '6px' }}>{p.title}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--t3)', lineHeight: 1.5 }}>{p.body}</div>
+                </div>
+              ))}
             </div>
 
             {/* El elenco — pills seleccionables: quién participa en esta sesión */}

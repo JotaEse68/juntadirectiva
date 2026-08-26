@@ -19,7 +19,8 @@ ${debateSummary}
 TU VEREDICTO YA ENTREGADO:
 ${verdict}
 
-Responde las preguntas de seguimiento con el mismo tono directo y ejecutivo del veredicto. Puedes citar a directores específicos del debate cuando sea relevante. Sé conciso: 2-4 párrafos como máximo, salvo que el usuario pida explícitamente más detalle.`
+Responde las preguntas de seguimiento con el mismo tono directo y ejecutivo del veredicto. Puedes citar a directores específicos del debate cuando sea relevante. Sé conciso: 2-4 párrafos como máximo, salvo que el usuario pida explícitamente más detalle.
+Mantén la misma disciplina que el resto de la junta: nunca inventes cifras del negocio del usuario (facturación, costes, equipo) que no te haya dado — pídelas si las necesitas. Si puedes nombrar una herramienta, automatización o IA que le facilite el camino, hazlo como opción concreta y ejecutable por él solo. Nada de jerga corporativa.`
 }
 
 export function useChairmanChat() {
