@@ -11,29 +11,34 @@ Como ${director.name} (${director.title}), da tu opinión exprés en 2-3 frases 
   return streamCompletion({ provider, apiKey, system: director.systemPrompt, userMsg, maxTokens: 180, serverMode: 'premium' })
 }
 
-const REPORT_SYSTEM_PAID = `Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces un PLAN DE ACCIÓN OPERATIVO. El usuario ya tiene gratis el veredicto: no lo repitas ni lo reformules; conviértelo en ejecución concreta.
+const REPORT_SYSTEM_PAID = `Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces un PLAN DE ACCIÓN para un autoempleado o microempresa de 1-3 personas — sin departamentos ni presupuesto de cinco cifras; la única persona que va a ejecutar esto es quien te lee. El usuario ya tiene gratis el veredicto: no lo repitas ni lo reformules; conviértelo en ejecución concreta que se pueda empezar hoy.
+
+REGLAS: nunca inventes cifras del negocio del usuario (facturación, costes, tamaño de equipo) que no te haya dado — usa variables relativas o precios reales de mercado de herramientas y freelancers. Cada acción debe poder ejecutarla el usuario solo, con una herramienta gratis o barata, o delegando puntualmente una tarea concreta a un freelancer (Fiverr/Upwork) — nunca asumas que hay alguien más con quien repartir el trabajo. Nada de jerga corporativa.
 
 Estructura obligatoria, con estos encabezados exactos en mayúsculas, cada uno en su propia línea:
 
-HOJA DE RUTA 30/60/90 DÍAS
-Qué debe lograrse en cada horizonte temporal, con hitos verificables.
+PRIMERA VICTORIA 48 HORAS
+La única acción que hay que hacer ya, antes que nada, y por qué es la que más mueve la aguja.
+
+PLAN DE 3 SEMANAS
+Qué debe lograrse cada semana, con hitos que se puedan comprobar sin ambigüedad.
 
 ACCIONES PRIORITARIAS
-6 a 8 acciones concretas, ordenadas por prioridad. Explica brevemente por qué cada una va en ese orden.
+5 a 7 acciones concretas, ordenadas por prioridad. Explica brevemente por qué cada una va en ese orden.
 
-RESPONSABLES Y ESFUERZO
-Para cada acción, propone el rol responsable y el esfuerzo estimado (bajo/medio/alto).
+TÚ O UN FREELANCER
+Para cada acción: si la hace el usuario, con qué herramienta y en cuánto tiempo aproximado; si conviene delegarla puntualmente a un freelancer barato, con el rango de precio real de mercado de esa tarea.
 
-KPIS Y SEÑALES DE ALERTA
-Entre 4 y 6 métricas con objetivo, frecuencia de revisión y la señal que exige corregir el rumbo.
+SEÑALES QUE MIRAR
+Entre 3 y 5 métricas simples con objetivo, cada cuánto revisarlas y la señal que obliga a corregir el rumbo.
 
-RIESGOS Y CONTINGENCIAS
-Los 3 riesgos más relevantes, su impacto y la respuesta concreta si se materializan.
+RIESGOS Y CÓMO EVITARLOS
+Los 3 riesgos más relevantes de este plan y la respuesta concreta si se materializan.
 
-ESCENARIOS DE DECISIÓN
-2 o 3 reglas tipo “si ocurre X, haz Y” para las incertidumbres centrales.
+SI OCURRE ESTO HAZ AQUELLO
+2 o 3 reglas tipo "si pasa X, haz Y" para las incertidumbres centrales de la situación.
 
-Sé específico, denso en valor y cero genérico. Este plan debe ser ejecutable por un equipo mañana mismo.`
+Sé específico, denso en valor y cero genérico. Este plan lo tiene que poder ejecutar una sola persona empezando mañana, no un equipo.`
 
 export function useReport() {
   const [report, setReport] = useState(null)       // { text, quickTakes: [{director,text}], locked }

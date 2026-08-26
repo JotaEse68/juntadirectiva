@@ -2,12 +2,13 @@ import React from 'react'
 import { downloadExecutiveReportPdf } from '../lib/reportPdf.js'
 
 const KNOWN_HEADERS = [
-  'HOJA DE RUTA 30/60/90 DÍAS',
+  'PRIMERA VICTORIA 48 HORAS',
+  'PLAN DE 3 SEMANAS',
   'ACCIONES PRIORITARIAS',
-  'RESPONSABLES Y ESFUERZO',
-  'KPIS Y SEÑALES DE ALERTA',
-  'RIESGOS Y CONTINGENCIAS',
-  'ESCENARIOS DE DECISIÓN',
+  'TÚ O UN FREELANCER',
+  'SEÑALES QUE MIRAR',
+  'RIESGOS Y CÓMO EVITARLOS',
+  'SI OCURRE ESTO HAZ AQUELLO',
 ]
 
 function parseSections(text) {
