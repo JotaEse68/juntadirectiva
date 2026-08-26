@@ -16,6 +16,7 @@ import { useChairmanChat } from './hooks/useChairmanChat.js'
 import ContextPanel from './components/ContextPanel.jsx'
 import { DIRECTORS, MEETING_TYPES, selectDirectorsForMeeting, orderForDebate } from './lib/directors.js'
 import { computeConsensus } from './lib/consensus.js'
+import { I18nProvider, useI18n } from './lib/i18n.js'
 
 const STORAGE_KEY = 'junta_api_key'
 const STORAGE_PROVIDER_KEY = 'junta_api_provider'
@@ -28,8 +29,34 @@ const PREMIUM_ACCESS_KEY = 'junta_premium_access'
 const PENDING_REPORT_KEY = 'junta_pending_report_context'
 const PENDING_SITUATION_KEY = 'junta_pending_situation'
 
+// Etiquetas del "perfil rápido" para el texto que se inyecta en `situation` — siempre en
+// español, igual que el resto del contexto que leen los directores (el idioma solo afecta
+// a los textos de la interfaz vía t()).
+const PROFILE_STRUCTURE_TEXT = { solo: 'una sola persona (solopreneur)', team: 'equipo pequeño de 2 a 5 personas' }
+const PROFILE_BUDGET_TEXT = { zero: '0€/mes, solo herramientas gratuitas', some: 'hasta 100-300€/mes' }
+const PROFILE_HOURS_TEXT = { low: 'menos de 5 horas a la semana', mid: 'entre 5 y 10 horas a la semana', full: 'dedicación full-time' }
+
+function buildProfileLine(profile) {
+  const parts = []
+  if (profile.structure) parts.push(`Estructura: ${PROFILE_STRUCTURE_TEXT[profile.structure]}`)
+  if (profile.budget) parts.push(`Presupuesto mensual en software: ${PROFILE_BUDGET_TEXT[profile.budget]}`)
+  if (profile.hours) parts.push(`Disponibilidad semanal para implementar: ${PROFILE_HOURS_TEXT[profile.hours]}`)
+  if (parts.length === 0) return ''
+  return `PERFIL DEL CONSULTANTE (dato ya confirmado, no lo vuelvas a preguntar): ${parts.join('. ')}.`
+}
+
 export default function App() {
+  return (
+    <I18nProvider>
+      <AppInner />
+    </I18nProvider>
+  )
+}
+
+function AppInner() {
+  const { lang, setLang, t } = useI18n()
   const [situation, setSituation]   = useState('')
+  const [profile, setProfile] = useState({ structure: null, budget: null, hours: null })
   const [meetingType, setMeetingType] = useState('decision')
   const [selectedIds, setSelectedIds] = useState(() => selectDirectorsForMeeting('decision', DIRECTORS).map(d => d.id))
   const [apiKey, setApiKey]         = useState(() => localStorage.getItem(STORAGE_KEY) || '')
@@ -244,9 +271,11 @@ export default function App() {
     }
 
     const directors = orderForDebate(selectedIds, DIRECTORS)
-    const effectiveSituation = writtenSituation || `Analiza el proyecto descrito en los documentos y fuentes de apoyo.\n\n${contextBrief}`
+    const baseSituation = writtenSituation || `Analiza el proyecto descrito en los documentos y fuentes de apoyo.\n\n${contextBrief}`
+    const profileLine = buildProfileLine(profile)
+    const effectiveSituation = profileLine ? `${profileLine}\n\n${baseSituation}` : baseSituation
     await conveneBoard({ directors, situation: effectiveSituation, meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider, mode: boardMode })
-  }, [situation, meetingType, selectedIds, apiKey, apiProvider, boardMode, isIdle, conveneBoard, buildContextBlock, buildSituationBrief])
+  }, [situation, meetingType, selectedIds, apiKey, apiProvider, boardMode, isIdle, conveneBoard, buildContextBlock, buildSituationBrief, profile])
 
   const handleBuyExtra = async () => {
     setCheckoutError(null)
@@ -274,7 +303,7 @@ export default function App() {
 
   const handleReset = () => {
     reset(); resetReport(); resetChat(); setShowReport(false); setSituation('')
-    setGateError(null)
+    setGateError(null); setProfile({ structure: null, budget: null, hours: null })
   }
   const handleSaveKey = (provider, key) => {
     localStorage.setItem(STORAGE_KEY, key)
@@ -284,6 +313,7 @@ export default function App() {
   }
   const handleDeleteSession = () => {
     clearHistory(); resetReport(); resetChat(); setShowReport(false); setSituation(''); setGateError(null)
+    setProfile({ structure: null, budget: null, hours: null })
   }
   const handlePrivateGranted = () => {
     setPrivateAccess(true)
@@ -325,21 +355,37 @@ export default function App() {
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {isRunning && (
             <span style={{ fontSize: '12px', color: 'var(--blue)', padding: '4px 12px', borderRadius: '20px', background: 'var(--blue-dim)', border: '1px solid var(--blue-bd)' }}>
-              {phase === 'convening' ? 'Convocando...' : phase === 'debating' ? (isPaused ? `Pausado · ${doneCount}/${totalCount}` : `Junta trabajando · ${doneCount}/${totalCount}`) : phase === 'contrasting' ? 'Contrastando hallazgos...' : 'Emitiendo veredicto...'}
+              {phase === 'convening' ? t('nav.convening') : phase === 'debating' ? (isPaused ? `${t('nav.paused')} · ${doneCount}/${totalCount}` : `${t('nav.working')} · ${doneCount}/${totalCount}`) : phase === 'contrasting' ? t('nav.contrasting') : t('nav.verdict')}
             </span>
           )}
           {phase === 'debating' && (
             <button
               onClick={isPaused ? resume : pause}
-              title={isPaused ? 'Reanudar el debate' : 'Pausar el debate — no se pierde lo ya generado'}
+              title={isPaused ? t('nav.resumeTitle') : t('nav.pauseTitle')}
               style={{ padding: '6px 10px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t3)', fontSize: '13px' }}
             >
               {isPaused ? '▶️' : '⏸️'}
             </button>
           )}
           <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '20px', border: '1px solid var(--bd)', color: 'var(--t3)', background: 'transparent' }}>
-            🌐 2 análisis/día
+            🌐 {t('nav.freeAnalyses')}
           </span>
+          <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--bd)', borderRadius: 'var(--r-sm)', overflow: 'hidden' }}>
+            <button
+              onClick={() => setLang('en')}
+              title="English"
+              style={{ padding: '6px 9px', fontSize: '11px', fontWeight: 600, border: 'none', background: lang === 'en' ? 'var(--blue-dim)' : 'transparent', color: lang === 'en' ? 'var(--blue)' : 'var(--t3)' }}
+            >
+              EN
+            </button>
+            <button
+              onClick={() => setLang('es')}
+              title="Español"
+              style={{ padding: '6px 9px', fontSize: '11px', fontWeight: 600, border: 'none', background: lang === 'es' ? 'var(--blue-dim)' : 'transparent', color: lang === 'es' ? 'var(--blue)' : 'var(--t3)' }}
+            >
+              ES
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -354,13 +400,13 @@ export default function App() {
                 <DownloadBanner ready={false} />
               </div>
               <p style={{ fontSize: '11px', color: 'var(--blue)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: '16px', fontWeight: 500 }}>
-                Tu junta directiva · 12 expertos
+                {t('hero.kicker')}
               </p>
               <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 'clamp(34px, 5vw, 58px)', fontWeight: 400, lineHeight: 1.1, marginBottom: '18px', color: 'var(--t1)' }}>
-                Nadie te avisó que ser tu propio jefe era <em style={{ color: 'var(--blue)' }}>discutir contigo mismo</em> a las 2 de la mañana.
+                {t('board.title')}
               </h1>
               <p style={{ fontSize: '16px', color: 'var(--t2)', maxWidth: '480px', margin: '0 auto', lineHeight: 1.7 }}>
-                Eres el CEO, el vendedor, el que factura y el que limpia la oficina — todo el mismo día. No tienes con quién pensar en voz alta, ni presupuesto para pagar que alguien te lo diga claro. Por eso existe esto: 12 especialistas que no vienen a impresionarte con powerpoints, sino a ayudarte a decidir rápido, gastar poco y no quemarte en el intento.
+                {t('board.subtitle')}
               </p>
             </div>
 
@@ -372,9 +418,9 @@ export default function App() {
               maxWidth: '760px', marginLeft: 'auto', marginRight: 'auto',
             }}>
               {[
-                { emoji: '😮‍💨', title: 'La soledad de decidir solo', body: 'Aquí discutes la decisión antes de tomarla, no después de arrepentirte.' },
-                { emoji: '🌀', title: 'La indigestión de ideas', body: 'Te dicen qué NO hacer esta semana, no solo qué sí.' },
-                { emoji: '💶', title: 'El miedo a gastar mal', body: 'Todo se mide en tu dinero real y tus horas reales — nunca en cifras inventadas.' },
+                { emoji: '😮‍💨', title: t('pain.lonelyTitle'), body: t('pain.lonelyBody') },
+                { emoji: '🌀', title: t('pain.overloadTitle'), body: t('pain.overloadBody') },
+                { emoji: '💶', title: t('pain.spendTitle'), body: t('pain.spendBody') },
               ].map((p, i) => (
                 <div key={i} style={{ textAlign: 'center', padding: '20px 16px', border: '1px solid var(--bd)', borderRadius: 'var(--r-md)', background: 'rgba(255,255,255,0.02)' }}>
                   <div style={{ fontSize: '22px', marginBottom: '10px' }}>{p.emoji}</div>
@@ -384,13 +430,59 @@ export default function App() {
               ))}
             </div>
 
+            {/* Perfil rápido (opcional): mismo mecanismo que en la versión del hackathon —
+                se inyecta en `situation` vía buildProfileLine (arriba) para que los directores
+                no tengan que preguntar tiempo/presupuesto dentro del debate. `order: 1` para
+                que caiga justo después del hero, antes del formulario (composer-card, order:2). */}
+            <div className="fade-up" style={{ order: 1, textAlign: 'center', marginBottom: '36px', paddingBottom: '4px', borderBottom: '1px solid var(--bd)' }}>
+              <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '6px', fontWeight: 500 }}>
+                {t('profile.label')}
+              </p>
+              <p style={{ fontSize: '12px', color: 'var(--t3)', marginBottom: '18px', lineHeight: 1.5, maxWidth: '460px', marginLeft: 'auto', marginRight: 'auto' }}>
+                {t('profile.hint')}
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '28px', paddingBottom: '22px' }}>
+                {[
+                  { key: 'structure', label: t('profile.structureLabel'), options: [['solo', t('profile.structureSolo')], ['team', t('profile.structureTeam')]] },
+                  { key: 'budget', label: t('profile.budgetLabel'), options: [['zero', t('profile.budgetZero')], ['some', t('profile.budgetSome')]] },
+                  { key: 'hours', label: t('profile.hoursLabel'), options: [['low', t('profile.hoursLow')], ['mid', t('profile.hoursMid')], ['full', t('profile.hoursFull')]] },
+                ].map(group => (
+                  <div key={group.key}>
+                    <p style={{ fontSize: '10px', color: 'var(--t3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '9px', fontWeight: 500 }}>{group.label}</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '220px' }}>
+                      {group.options.map(([id, label]) => {
+                        const isOn = profile[group.key] === id
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setProfile(prev => ({ ...prev, [group.key]: prev[group.key] === id ? null : id }))}
+                            aria-pressed={isOn}
+                            style={{
+                              padding: '6px 13px', borderRadius: '24px',
+                              border: `1px solid ${isOn ? 'var(--blue-bd)' : 'var(--bd)'}`,
+                              background: isOn ? 'var(--blue-dim)' : 'rgba(255,255,255,0.03)',
+                              color: isOn ? 'var(--blue)' : 'var(--t3)',
+                              cursor: 'pointer', fontSize: '12px', fontWeight: 500, transition: 'all .15s',
+                            }}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* El elenco — pills seleccionables: quién participa en esta sesión */}
             <div className="fade-up board-customization" style={{ marginBottom: '48px', animationDelay: '.08s' }}>
               <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '14px', textAlign: 'center', fontWeight: 500 }}>
-                Tu junta directiva · {DIRECTORS.length} especialistas · {selectedIds.length} participantes recomendados
+                {t('board.chooseParticipants').replace('{specialists}', DIRECTORS.length).replace('{selected}', selectedIds.length)}
               </p>
               <p style={{ fontSize: '12px', color: 'var(--t2)', textAlign: 'center', margin: '-5px auto 16px', maxWidth: '520px' }}>
-                Todos están aquí. La selección activa se adapta al reto; pulsa sobre cualquiera para incluirlo o quitarlo.
+                {t('board.chooseHint')}
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
                 {DIRECTORS.map(d => {
@@ -403,7 +495,7 @@ export default function App() {
                     <button
                       key={d.id}
                       onClick={() => toggleDirector(d.id)}
-                      title={isOn ? `Quitar a ${d.name} de esta sesión` : `Incluir a ${d.name} en esta sesión`}
+                      title={(isOn ? t('board.removeDirector') : t('board.includeDirector')).replace('{name}', d.name)}
                       style={{
                         display: 'flex', alignItems: 'center', gap: '7px',
                         padding: '7px 14px', borderRadius: '24px',
@@ -424,33 +516,33 @@ export default function App() {
                 })}
               </div>
               <p style={{ fontSize: '11px', color: 'var(--t3)', textAlign: 'center', marginTop: '10px' }}>
-                {boardMode === 'fast' ? 'La Junta rápida conecta perspectivas en paralelo y luego las contrasta.' : 'La Junta profunda deja que cada director responda a los argumentos anteriores.'}
+                {boardMode === 'fast' ? t('board.fastNote') : t('board.deepNote')}
               </p>
             </div>
 
             {/* Formulario */}
             <div className="fade-up composer-card" style={{ animationDelay: '.14s', background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 'var(--r-xl)', padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <div className="meeting-type">
-                <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '12px', fontWeight: 500 }}>Tipo de reunión</p>
+                <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '12px', fontWeight: 500 }}>{t('form.meetingType')}</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px' }}>
                   {MEETING_TYPES.map(mt => (
                     <button key={mt.id} onClick={() => handleMeetingTypeChange(mt.id)}
                       style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', textAlign: 'left', border: `1px solid ${meetingType === mt.id ? 'var(--blue-bd)' : 'var(--bd)'}`, background: meetingType === mt.id ? 'var(--blue-dim)' : 'var(--bg3)', transition: 'all .2s' }}>
                       <div style={{ fontSize: '16px', marginBottom: '4px' }}>{mt.icon}</div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: meetingType === mt.id ? 'var(--blue)' : 'var(--t1)', marginBottom: '2px' }}>{mt.label}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--t3)' }}>{mt.desc}</div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: meetingType === mt.id ? 'var(--blue)' : 'var(--t1)', marginBottom: '2px' }}>{t(`meeting.${mt.id}`)}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--t3)' }}>{t(`meeting.${mt.id}Desc`)}</div>
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="situation-field">
-                <p style={{ fontSize: '11px', color: 'var(--blue)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '10px', fontWeight: 700 }}>¿Qué decisión necesitas tomar?</p>
+                <p style={{ fontSize: '11px', color: 'var(--blue)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '10px', fontWeight: 700 }}>{t('form.situationLabel')}</p>
                 <textarea
                   id="board-situation"
                   value={situation}
                   onChange={e => setSituation(e.target.value.slice(0, MAX_CHARS))}
-                  placeholder="Describe la situación con contexto, o adjunta un documento de apoyo debajo. Cuánto más específico seas, más útil será el análisis."
+                  placeholder={t('form.situationPlaceholder')}
                   maxLength={MAX_CHARS}
                   aria-describedby="board-situation-hint board-situation-count"
                   rows={5}
@@ -460,15 +552,15 @@ export default function App() {
                   onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) handleConvene() }}
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
-                  <span id="board-situation-hint" style={{ fontSize: '11px', color: 'var(--t3)' }}>⌘+Enter para convocar</span>
+                  <span id="board-situation-hint" style={{ fontSize: '11px', color: 'var(--t3)' }}>{t('form.cmdEnterHint')}</span>
                   <span id="board-situation-count" style={{ fontSize: '11px', color: 'var(--t3)' }}>{situation.length}/{MAX_CHARS}</span>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px', marginTop: '12px' }}>
                   {[
-                    '¿Contratar o externalizar esta función?',
-                    '¿Lanzar esta oferta ahora?',
-                    '¿Invertir en este proyecto?',
-                    '¿Cómo salimos de esta crisis?',
+                    t('form.exampleHire'),
+                    t('form.exampleLaunch'),
+                    t('form.exampleInvest'),
+                    t('form.exampleCrisis'),
                   ].map(example => (
                     <button key={example} type="button" onClick={() => setSituation(example)} style={{ padding: '6px 10px', border: '1px solid var(--bd)', borderRadius: '20px', color: 'var(--t2)', background: 'var(--bg3)', fontSize: '11px', textAlign: 'left' }}>
                       {example}
@@ -478,26 +570,26 @@ export default function App() {
               </div>
 
               <fieldset style={{ border: 0, padding: 0 }}>
-                <legend style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '10px', fontWeight: 500 }}>Ritmo de deliberación</legend>
+                <legend style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '10px', fontWeight: 500 }}>{t('form.deliberationPace')}</legend>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
-                  <button type="button" onClick={() => setBoardMode('fast')} aria-pressed={boardMode === 'fast'} style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', border: `1px solid ${boardMode === 'fast' ? 'var(--blue-bd)' : 'var(--bd)'}`, background: boardMode === 'fast' ? 'var(--blue-dim)' : 'var(--bg3)', color: 'var(--t1)', textAlign: 'left' }}><strong style={{ fontSize: '13px', color: 'var(--blue)' }}>Junta rápida</strong><span style={{ display: 'block', marginTop: '3px', fontSize: '11px', color: 'var(--t2)' }}>Perspectivas paralelas + contraste.</span></button>
-                  <button type="button" onClick={() => (premiumAccess || apiKey || privateAccess) && setBoardMode('deep')} aria-pressed={boardMode === 'deep'} style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', border: `1px solid ${boardMode === 'deep' ? 'var(--blue-bd)' : 'var(--bd)'}`, background: boardMode === 'deep' ? 'var(--blue-dim)' : 'var(--bg3)', color: 'var(--t1)', textAlign: 'left', opacity: premiumAccess || apiKey || privateAccess ? 1 : .62 }}><strong style={{ fontSize: '13px', color: 'var(--blue)' }}>Junta profunda {!(premiumAccess || apiKey || privateAccess) && '· Premium'}</strong><span style={{ display: 'block', marginTop: '3px', fontSize: '11px', color: 'var(--t2)' }}>Cada director escucha y rebate a los anteriores.</span></button>
+                  <button type="button" onClick={() => setBoardMode('fast')} aria-pressed={boardMode === 'fast'} style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', border: `1px solid ${boardMode === 'fast' ? 'var(--blue-bd)' : 'var(--bd)'}`, background: boardMode === 'fast' ? 'var(--blue-dim)' : 'var(--bg3)', color: 'var(--t1)', textAlign: 'left' }}><strong style={{ fontSize: '13px', color: 'var(--blue)' }}>{t('form.fastBoard')}</strong><span style={{ display: 'block', marginTop: '3px', fontSize: '11px', color: 'var(--t2)' }}>{t('form.fastBoardDesc')}</span></button>
+                  <button type="button" onClick={() => (premiumAccess || apiKey || privateAccess) && setBoardMode('deep')} aria-pressed={boardMode === 'deep'} style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', border: `1px solid ${boardMode === 'deep' ? 'var(--blue-bd)' : 'var(--bd)'}`, background: boardMode === 'deep' ? 'var(--blue-dim)' : 'var(--bg3)', color: 'var(--t1)', textAlign: 'left', opacity: premiumAccess || apiKey || privateAccess ? 1 : .62 }}><strong style={{ fontSize: '13px', color: 'var(--blue)' }}>{t('form.deepBoard')} {!(premiumAccess || apiKey || privateAccess) && t('form.deepBoardPremium')}</strong><span style={{ display: 'block', marginTop: '3px', fontSize: '11px', color: 'var(--t2)' }}>{t('form.deepBoardDesc')}</span></button>
                 </div>
-                {!(premiumAccess || apiKey || privateAccess) && <p style={{ marginTop: '7px', fontSize: '11px', color: 'var(--t3)' }}>La Junta profunda se activa con tu API propia o al desbloquear el informe premium.</p>}
+                {!(premiumAccess || apiKey || privateAccess) && <p style={{ marginTop: '7px', fontSize: '11px', color: 'var(--t3)' }}>{t('form.deepBoardHint')}</p>}
               </fieldset>
 
               {/* Panel de contexto enriquecido */}
               <div className="context-field">
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
                   <p style={{ fontSize:'11px', color:'var(--t3)', letterSpacing:'.08em', textTransform:'uppercase', fontWeight:500 }}>
-                    Contexto adicional
+                    {t('context.label')}
                     <span style={{ marginLeft:'6px', fontSize:'10px', padding:'2px 7px', borderRadius:'4px', background:'var(--blue-dim)', color:'var(--blue)', border:'1px solid var(--blue-bd)' }}>
-                      Opcional
+                      {t('context.optional')}
                     </span>
                   </p>
                   {hasContext && (
                     <span style={{ fontSize:'11px', color:'var(--blue)' }}>
-                      {ctxItems.filter(i=>i.status==='done').length} fuente{ctxItems.filter(i=>i.status==='done').length!==1?'s':''} lista{ctxItems.filter(i=>i.status==='done').length!==1?'s':''}
+                      {ctxItems.filter(i => i.status === 'done').length} {ctxItems.filter(i => i.status === 'done').length !== 1 ? t('context.sourcesReadyPlural') : t('context.sourcesReady')}
                     </span>
                   )}
                 </div>
@@ -511,32 +603,32 @@ export default function App() {
                 />
               </div>
 
-              <p style={{ marginTop: '-12px', fontSize: '11px', color: 'var(--t3)', lineHeight: 1.55 }}>Privacidad: los documentos se usan para esta deliberación. La última junta se conserva 24 horas únicamente en este navegador; no guardamos adjuntos en ese historial.</p>
+              <p style={{ marginTop: '-12px', fontSize: '11px', color: 'var(--t3)', lineHeight: 1.55 }}>{t('form.privacyNote')}</p>
 
               <button
                 onClick={handleConvene}
                 disabled={(!situation.trim() && !hasContext) || ctxProcessing || gateChecking || selectedIds.length === 0}
                 style={{ padding: '17px', borderRadius: 'var(--r-md)', border: 'none', background: ((situation.trim() || hasContext) && selectedIds.length > 0) ? 'var(--blue)' : 'var(--bg3)', color: ((situation.trim() || hasContext) && selectedIds.length > 0) ? 'var(--bg0)' : 'var(--t3)', fontSize: '15px', fontWeight: 700, cursor: ((situation.trim() || hasContext) && selectedIds.length > 0) ? 'pointer' : 'not-allowed', transition: 'all .2s', letterSpacing: '.02em' }}
               >
-                {selectedIds.length === 0 ? '⚠️ Elige al menos un director' : gateChecking ? 'Comprobando disponibilidad...' : '🏛️ Convocar la junta'}
+                {selectedIds.length === 0 ? t('form.chooseAtLeastOne') : gateChecking ? t('form.checkingAvailability') : `🏛️ ${t('action.convene')}`}
               </button>
 
               {gateError && (
                 <DailyLimitBanner error={gateError} onBuyExtra={handleBuyExtra} buying={buyingExtra} />
               )}
 
-              <p style={{ fontSize: '12px', color: 'var(--t3)', textAlign: 'center' }}>🌐 Modo gratuito · 2 análisis/día</p>
+              <p style={{ fontSize: '12px', color: 'var(--t3)', textAlign: 'center' }}>{t('form.freeMode')}</p>
             </div>
 
             <section className="board-overview fade-up" aria-labelledby="overview-title" style={{ animationDelay: '.18s' }}>
               <div>
-                <p className="eyebrow">Lo que ocurre después</p>
-                <h2 id="overview-title">Una decisión no termina en el veredicto.</h2>
+                <p className="eyebrow">{t('overview.kicker')}</p>
+                <h2 id="overview-title">{t('overview.title')}</h2>
               </div>
               <ol className="board-overview__steps">
-                <li><span>01</span><div><strong>La junta la cuestiona</strong><p>Especialistas revelan puntos ciegos y caminos alternativos.</p></div></li>
-                <li><span>02</span><div><strong>El Chairman le da dirección</strong><p>Una decisión clara, sus condiciones y próximos pasos.</p></div></li>
-                <li><span>03</span><div><strong>Tú puedes cambiar su rumbo</strong><p>Rebate, añade evidencia y convierte cada ajuste en un PDF ejecutivo.</p></div></li>
+                <li><span>01</span><div><strong>{t('overview.stepOne')}</strong><p>{t('overview.stepOneDesc')}</p></div></li>
+                <li><span>02</span><div><strong>{t('overview.stepTwo')}</strong><p>{t('overview.stepTwoDesc')}</p></div></li>
+                <li><span>03</span><div><strong>{t('overview.stepThree')}</strong><p>{t('overview.stepThreeDesc')}</p></div></li>
               </ol>
             </section>
 
@@ -546,37 +638,37 @@ export default function App() {
         {/* ── DEBATE / RESULTADOS ── */}
         {(isRunning || isDone) && (
           <div>
-            {!online && <div role="alert" style={{ marginBottom: '18px', padding: '13px 16px', borderLeft: '2px solid var(--amber)', background: 'rgba(245,180,60,.08)', color: 'var(--t2)', fontSize: '13px' }}>⚠️ Estás sin conexión. La junta conserva los resultados ya recibidos; vuelve a conectarte y pulsa Reintentar.</div>}
+            {!online && <div role="alert" style={{ marginBottom: '18px', padding: '13px 16px', borderLeft: '2px solid var(--amber)', background: 'rgba(245,180,60,.08)', color: 'var(--t2)', fontSize: '13px' }}>{t('errors.offline')}</div>}
             {/* Header sesión */}
             <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: '11px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 500 }}>
-                  {phase === 'convening' ? 'Convocando junta...' : phase === 'debating' ? `La junta está conectando perspectivas · ${doneCount}/${totalCount}` : phase === 'contrasting' ? 'Contrastando hallazgos antes del veredicto...' : phase === 'verdict' ? 'El Chairman está integrando la decisión...' : 'Sesión completada'}
+                  {phase === 'convening' ? t('nav.convening') : phase === 'debating' ? t('status.debating').replace('{done}', doneCount).replace('{total}', totalCount) : phase === 'contrasting' ? t('status.contrasting') : phase === 'verdict' ? t('status.verdictLoading') : t('status.done')}
                 </p>
                 <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: '22px', fontWeight: 400, color: 'var(--t1)', lineHeight: 1.3, maxWidth: '580px', fontStyle: 'italic' }}>
                   "{situation.slice(0, 110)}{situation.length > 110 ? '…' : ''}"
                 </h2>
               </div>
-              {isDone && <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}><button onClick={handleReset} style={{ padding: '9px 18px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t2)', fontSize: '13px', whiteSpace: 'nowrap', flexShrink: 0 }}>Nueva sesión</button><button onClick={handleDeleteSession} style={{ padding: '9px 12px', borderRadius: 'var(--r-sm)', border: '1px solid var(--red-bd)', color: 'var(--red)', fontSize: '12px' }}>Eliminar sesión</button></div>}
+              {isDone && <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}><button onClick={handleReset} style={{ padding: '9px 18px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t2)', fontSize: '13px', whiteSpace: 'nowrap', flexShrink: 0 }}>{t('action.newSessionShort')}</button><button onClick={handleDeleteSession} style={{ padding: '9px 12px', borderRadius: 'var(--r-sm)', border: '1px solid var(--red-bd)', color: 'var(--red)', fontSize: '12px' }}>{t('action.deleteSession')}</button></div>}
             </div>
 
             {/* Error */}
             {globalError && (
               <div style={{ padding: '14px 18px', background: 'var(--red-dim)', border: '1px solid var(--red-bd)', borderRadius: 'var(--r-md)', color: 'var(--red)', fontSize: '13px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                 <span>⚠️ {globalError}</span>
-                <button onClick={retry} style={{ color: 'var(--red)', textDecoration: 'underline', fontWeight: 700 }}>Reintentar</button>
+                <button onClick={retry} style={{ color: 'var(--red)', textDecoration: 'underline', fontWeight: 700 }}>{t('errors.retry')}</button>
               </div>
             )}
 
             {/* Conversación de la junta */}
             <div style={{ marginBottom: '32px' }}>
               <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '18px', fontWeight: 500 }}>
-                La conversación · clic en un director para ver su perfil
+                {t('board.conversationLabel')}
               </p>
               <DebateChat directors={activeDirectors} directorStates={directorStates} phase={phase} onClickDirector={setSelectedDirector} />
             </div>
 
-            {Object.values(directorStates).some(state => state.status === 'error') && doneCount > 0 && <p style={{ margin: '-12px 0 24px', padding: '11px 14px', borderLeft: '2px solid var(--amber)', background: 'rgba(245,180,60,.08)', color: 'var(--t2)', fontSize: '12px', lineHeight: 1.5 }}>Algunos especialistas no pudieron responder. El Chairman seguirá trabajando con las aportaciones disponibles y entregará un resultado parcial útil.</p>}
+            {Object.values(directorStates).some(state => state.status === 'error') && doneCount > 0 && <p style={{ margin: '-12px 0 24px', padding: '11px 14px', borderLeft: '2px solid var(--amber)', background: 'rgba(245,180,60,.08)', color: 'var(--t2)', fontSize: '12px', lineHeight: 1.5 }}>{t('errors.partial')}</p>}
 
             {/* Veredicto — la conclusión, al final de la conversación */}
             {(verdict || verdictLoading) && (
@@ -604,9 +696,9 @@ export default function App() {
             {/* Chat de seguimiento con el Chairman — después del veredicto */}
             {isDone && verdict && (
               <section style={{ marginBottom: '16px', padding: '18px 20px', border: '1px solid var(--blue-bd)', borderRadius: 'var(--r-md)', background: 'linear-gradient(135deg, var(--blue-dim), rgba(35,190,174,.08))' }} aria-labelledby="chairman-feature-title">
-                <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: '5px' }}>La decisión continúa</p>
-                <h3 id="chairman-feature-title" style={{ fontSize: '17px', color: 'var(--t1)', marginBottom: '6px' }}>El veredicto es el inicio de la sesión de trabajo.</h3>
-                <p style={{ fontSize: '13px', color: 'var(--t2)', lineHeight: 1.55 }}>Rebate supuestos, compara alternativas, añade nueva evidencia y convierte cada propuesta refinada en un PDF.</p>
+                <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: '5px' }}>{t('chairman.featureKicker')}</p>
+                <h3 id="chairman-feature-title" style={{ fontSize: '17px', color: 'var(--t1)', marginBottom: '6px' }}>{t('chairman.featureTitle')}</h3>
+                <p style={{ fontSize: '13px', color: 'var(--t2)', lineHeight: 1.55 }}>{t('chairman.featureDesc')}</p>
               </section>
             )}
 
@@ -626,9 +718,9 @@ export default function App() {
             {isDone && (
               <div style={{ textAlign: 'center', marginTop: '48px' }}>
                 <button onClick={handleReset} style={{ padding: '13px 32px', borderRadius: 'var(--r-md)', border: '1px solid var(--blue-bd)', background: 'var(--blue-dim)', color: 'var(--blue)', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
-                  🏛️ Nueva sesión de junta
+                  🏛️ {t('action.newSession')}
                 </button>
-                <p style={{ marginTop: '14px', fontSize: '11px', color: 'var(--t3)', lineHeight: 1.5 }}>Privacidad: esta junta se conserva solo 24 horas en este navegador. Los adjuntos no se guardan en el historial. Puedes eliminarla arriba cuando quieras.</p>
+                <p style={{ marginTop: '14px', fontSize: '11px', color: 'var(--t3)', lineHeight: 1.5 }}>{t('footer.bottomPrivacy')}</p>
               </div>
             )}
           </div>
@@ -637,8 +729,8 @@ export default function App() {
         <DirectorsRoster directors={DIRECTORS} onClickDirector={setSelectedDirector} />
 
         <footer className="site-footer" aria-label="Información del sitio">
-          <div className="site-footer__topline"><div><p className="site-footer__product">Junta Directiva AI · Una experiencia de IA Packs Plugin Suite™</p><p className="site-footer__tagline">© 2026 Quintessence Consulting Group LLC · Creado por Jota Santos</p></div><nav className="site-footer__links" aria-label="Enlaces del creador"><a href="https://jsantos.pro/" target="_blank" rel="noreferrer">Jota Santos</a><a href="https://iapacks.com/" target="_blank" rel="noreferrer">IA Packs</a></nav></div>
-          <details className="site-footer__legal"><summary>Aviso legal y uso responsable</summary><div className="site-footer__legal-copy"><p><strong>Descargo de responsabilidad:</strong> Junta Directiva AI apoya decisiones con IA generativa; no ofrece asesoramiento legal, financiero, médico, fiscal ni profesional y no garantiza resultados.</p><p><strong>Uso responsable:</strong> Verifica el contenido generado antes de actuar y no aportes datos confidenciales, personales o de terceros sin derecho a hacerlo.</p><p><strong>Derechos:</strong> La marca, lógica de producto, documentación y arquitectura están protegidas. Se prohíbe su extracción, reventa o distribución no autorizada.</p></div></details>
+          <div className="site-footer__topline"><div><p className="site-footer__product">{t('footer.product')}</p><p className="site-footer__tagline">{t('footer.tagline')}</p></div><nav className="site-footer__links" aria-label={t('footer.linksLabel')}><a href="https://jsantos.pro/" target="_blank" rel="noreferrer">Jota Santos</a><a href="https://iapacks.com/" target="_blank" rel="noreferrer">IA Packs</a></nav></div>
+          <details className="site-footer__legal"><summary>{t('footer.disclaimerSummary')}</summary><div className="site-footer__legal-copy"><p><strong>{t('footer.disclaimerLabel')}</strong> {t('footer.disclaimer')}</p><p><strong>{t('footer.useLabel')}</strong> {t('footer.use')}</p><p><strong>{t('footer.rightsLabel')}</strong> {t('footer.rights')}</p></div></details>
         </footer>
       </main>
 
