@@ -58,24 +58,38 @@ export async function streamCompletion({ provider, apiKey, system, userMsg, maxT
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let fullText = ''
+  // Un chunk de red no coincide necesariamente con un evento SSE completo: una línea
+  // "data: {...}" puede llegar partida entre dos reads. Sin acumular en un buffer y
+  // procesar solo líneas ya cerradas por un '\n', ambos fragmentos son JSON inválido por
+  // separado, el catch de abajo los descarta en silencio, y el texto final queda mordido
+  // a mitad de frase — exactamente el bug que corrompía informes y respuestas largas.
+  let buffer = ''
+
+  const processLine = (line) => {
+    if (!line.startsWith('data: ')) return
+    const data = line.slice(6).trim()
+    if (!data || data === '[DONE]') return
+    try {
+      const parsed = JSON.parse(data)
+      const delta = extractDelta(effectiveProvider, parsed)
+      if (delta) {
+        fullText += delta
+        onChunk?.(fullText)
+      }
+    } catch { /* línea realmente malformada (no solo partida a mitad) */ }
+  }
 
   while (true) {
     const { done, value } = await reader.read()
-    if (done) break
-    const lines = decoder.decode(value).split('\n')
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      const data = line.slice(6).trim()
-      if (data === '[DONE]') continue
-      try {
-        const parsed = JSON.parse(data)
-        const delta = extractDelta(effectiveProvider, parsed)
-        if (delta) {
-          fullText += delta
-          onChunk?.(fullText)
-        }
-      } catch { /* skip */ }
+    if (value) buffer += decoder.decode(value, { stream: true })
+    if (done) {
+      buffer += decoder.decode() // vacía cualquier byte multibyte pendiente en el decoder
+      buffer.split('\n').forEach(processLine)
+      break
     }
+    const lines = buffer.split('\n')
+    buffer = lines.pop() // la última línea puede seguir incompleta: se procesa en la próxima vuelta
+    lines.forEach(processLine)
   }
   return fullText
 }
