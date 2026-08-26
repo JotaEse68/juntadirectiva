@@ -97,7 +97,7 @@ export default function ReportModal({ situation, verdict, report, loading, error
                     disabled={upgrading}
                     style={{ padding: '10px 18px', borderRadius: 'var(--r-sm)', border: 'none', background: upgrading ? 'var(--bg3)' : 'var(--blue)', color: upgrading ? 'var(--t2)' : 'var(--bg0)', fontSize: '13px', fontWeight: 700, cursor: upgrading ? 'not-allowed' : 'pointer' }}
                   >
-                    {upgrading ? 'Procesando...' : 'Desbloquear plan paso a paso · 4,99 €'}
+                    {upgrading ? 'Procesando...' : 'Crear mi plan de acción · 4,99 €'}
                   </button>
                 </div>
               )}
