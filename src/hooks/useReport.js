@@ -8,7 +8,7 @@ async function quickTake({ director, situation, apiKey, provider }) {
   const userMsg = `SITUACIÓN: ${situation}
 
 Como ${director.name} (${director.title}), da tu opinión exprés en 2-3 frases desde tu especialidad. No es un análisis largo — solo tu primera reacción experta y directa, sin rodeos.`
-  return streamCompletion({ provider, apiKey, system: director.systemPrompt, userMsg, maxTokens: 180, serverMode: 'premium' })
+  return streamCompletion({ provider, apiKey, system: director.systemPrompt, userMsg, maxTokens: 260, serverMode: 'premium' })
 }
 
 const REPORT_SYSTEM_PAID = `Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces un PLAN DE ACCIÓN para un autoempleado o microempresa de 1-3 personas — sin departamentos ni presupuesto de cinco cifras; la única persona que va a ejecutar esto es quien te lee. El usuario ya tiene gratis el veredicto: no lo repitas ni lo reformules; conviértelo en ejecución concreta que se pueda empezar hoy.
@@ -87,7 +87,7 @@ Produce el informe siguiendo exactamente la estructura indicada.`
       // 1800 se quedaba corto para las 7 secciones de la nueva estructura (el informe se
       // cortaba a media frase, normalmente justo después de ACCIONES PRIORITARIAS, sin
       // llegar a TÚ O UN FREELANCER / SEÑALES QUE MIRAR / RIESGOS / SI OCURRE ESTO).
-      const text = await streamCompletion({ provider, apiKey, system: REPORT_SYSTEM_PAID, userMsg: reportPrompt, maxTokens: 2800, serverMode: 'premium' })
+      const text = await streamCompletion({ provider, apiKey, system: REPORT_SYSTEM_PAID, userMsg: reportPrompt, maxTokens: 3600, serverMode: 'premium' })
       setReport({ text, quickTakes, locked: false })
     } catch (err) {
       setError(err.message || 'No se pudo generar el informe')
