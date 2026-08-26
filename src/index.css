@@ -46,13 +46,13 @@ textarea, input { font-family: 'Inter', sans-serif; }
 .board-customization { order: 2; }
 .composer-card { order: 3; }
 
-/* Dentro del formulario: tipo de reunión -> perfil rápido -> situación -> ritmo de
-   deliberación -> contexto adicional -> aviso de privacidad -> botón -> aviso de límite
-   diario -> modo gratuito. */
+/* Dentro del formulario: situación (lo primero clicable, sin categorías de por medio) ->
+   tipo de reunión -> perfil rápido -> ritmo de deliberación -> contexto adicional ->
+   aviso de privacidad -> botón -> aviso de límite diario -> modo gratuito + precio. */
 .composer-card { display: flex; flex-direction: column; }
-.composer-card .meeting-type { order: 1; }
-.composer-card .profile-field { order: 2; }
-.composer-card .situation-field { order: 3; }
+.composer-card .situation-field { order: 1; }
+.composer-card .meeting-type { order: 2; }
+.composer-card .profile-field { order: 3; }
 .composer-card .board-mode-field { order: 4; }
 .composer-card .context-field { order: 5; }
 .composer-card .privacy-note { order: 6; }

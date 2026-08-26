@@ -427,14 +427,6 @@ function AppInner() {
               ))}
             </div>
 
-            {/* Banner de precios (informativo, sin botón — ready=false): antes vivía justo
-                encima del hero; ahora va aquí, después del gancho emocional y las tarjetas de
-                dolor, para no vender antes de enganchar, pero sigue arriba del todo para que
-                no quede enterrado. */}
-            <div className="fade-up" style={{ order: 1 }}>
-              <DownloadBanner ready={false} />
-            </div>
-
             {/* El elenco — pills seleccionables: quién participa en esta sesión */}
             <div className="fade-up board-customization" style={{ marginBottom: '48px', animationDelay: '.08s' }}>
               <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '14px', textAlign: 'center', fontWeight: 500 }}>

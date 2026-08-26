@@ -83,7 +83,7 @@ const DICT = {
     'form.chooseAtLeastOne': '⚠️ Choose at least one director',
     'form.checkingAvailability': 'Checking availability...',
     'action.convene': 'Convene the board',
-    'form.freeMode': '🌐 Free mode · 2 analyses/day',
+    'form.freeMode': '🌐 Free · 2 analyses/day. Want the step-by-step action plan afterwards? From $4.99, no subscription.',
 
     'overview.kicker': 'What happens next',
     'overview.title': 'A decision does not end with the verdict.',
@@ -199,7 +199,7 @@ const DICT = {
     'form.chooseAtLeastOne': '⚠️ Elige al menos un director',
     'form.checkingAvailability': 'Comprobando disponibilidad...',
     'action.convene': 'Convocar la junta',
-    'form.freeMode': '🌐 Modo gratuito · 2 análisis/día',
+    'form.freeMode': '🌐 Gratis · 2 análisis/día. ¿Quieres el plan de acción paso a paso después? Desde 4,99 €, sin suscripción.',
 
     'overview.kicker': 'Lo que ocurre después',
     'overview.title': 'Una decisión no termina en el veredicto.',
