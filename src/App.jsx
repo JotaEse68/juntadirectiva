@@ -569,7 +569,7 @@ function AppInner() {
                 </div>
               </div>
 
-              <fieldset style={{ border: 0, padding: 0 }}>
+              <fieldset className="board-mode-field" style={{ border: 0, padding: 0 }}>
                 <legend style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '10px', fontWeight: 500 }}>{t('form.deliberationPace')}</legend>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
                   <button type="button" onClick={() => setBoardMode('fast')} aria-pressed={boardMode === 'fast'} style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', border: `1px solid ${boardMode === 'fast' ? 'var(--blue-bd)' : 'var(--bd)'}`, background: boardMode === 'fast' ? 'var(--blue-dim)' : 'var(--bg3)', color: 'var(--t1)', textAlign: 'left' }}><strong style={{ fontSize: '13px', color: 'var(--blue)' }}>{t('form.fastBoard')}</strong><span style={{ display: 'block', marginTop: '3px', fontSize: '11px', color: 'var(--t2)' }}>{t('form.fastBoardDesc')}</span></button>
@@ -603,7 +603,7 @@ function AppInner() {
                 />
               </div>
 
-              <p style={{ marginTop: '-12px', fontSize: '11px', color: 'var(--t3)', lineHeight: 1.55 }}>{t('form.privacyNote')}</p>
+              <p className="privacy-note" style={{ fontSize: '11px', color: 'var(--t3)', lineHeight: 1.55 }}>{t('form.privacyNote')}</p>
 
               <button
                 onClick={handleConvene}
@@ -617,7 +617,7 @@ function AppInner() {
                 <DailyLimitBanner error={gateError} onBuyExtra={handleBuyExtra} buying={buyingExtra} />
               )}
 
-              <p style={{ fontSize: '12px', color: 'var(--t3)', textAlign: 'center' }}>{t('form.freeMode')}</p>
+              <p className="free-mode-note" style={{ fontSize: '12px', color: 'var(--t3)', textAlign: 'center' }}>{t('form.freeMode')}</p>
             </div>
 
             <section className="board-overview fade-up" aria-labelledby="overview-title" style={{ animationDelay: '.18s' }}>

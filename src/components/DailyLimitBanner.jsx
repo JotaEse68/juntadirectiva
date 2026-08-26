@@ -2,7 +2,7 @@ import React from 'react'
 
 export default function DailyLimitBanner({ error, onBuyExtra, buying }) {
   return (
-    <div style={{
+    <div className="daily-limit-banner" style={{
       background: 'var(--bg2)', border: '1px solid var(--red-bd)', borderRadius: 'var(--r-md)',
       padding: '16px 18px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginTop: '12px',
     }}>
