@@ -84,7 +84,10 @@ ${quickSummary || '(todos los directores participaron en vivo)'}
 
 Produce el informe siguiendo exactamente la estructura indicada.`
 
-      const text = await streamCompletion({ provider, apiKey, system: REPORT_SYSTEM_PAID, userMsg: reportPrompt, maxTokens: 1800, serverMode: 'premium' })
+      // 1800 se quedaba corto para las 7 secciones de la nueva estructura (el informe se
+      // cortaba a media frase, normalmente justo después de ACCIONES PRIORITARIAS, sin
+      // llegar a TÚ O UN FREELANCER / SEÑALES QUE MIRAR / RIESGOS / SI OCURRE ESTO).
+      const text = await streamCompletion({ provider, apiKey, system: REPORT_SYSTEM_PAID, userMsg: reportPrompt, maxTokens: 2800, serverMode: 'premium' })
       setReport({ text, quickTakes, locked: false })
     } catch (err) {
       setError(err.message || 'No se pudo generar el informe')

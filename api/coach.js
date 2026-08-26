@@ -38,13 +38,15 @@ function cors(origin) {
   }
 }
 
+// El tope de max_tokens ya lo decide el llamador (ver handler: distingue modo gratis de
+// premium) — estas funciones ya no lo recortan a un valor fijo por su cuenta.
 async function createClaudeStream({ apiKey, systemPrompt, userPrompt, maxTokens, attachments = [] }) {
   return fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: Math.min(maxTokens, 1200),
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: 'user', content: attachments.length ? [{ type: 'text', text: userPrompt }, ...attachments.filter(a => a?.kind === 'image' && /^image\//.test(a.mimeType || '') && a.data?.length < 12_000_000).map(a => ({ type: 'image', source: { type: 'base64', media_type: a.mimeType, data: a.data } }))] : userPrompt }],
       stream: true,
@@ -58,7 +60,7 @@ async function createOpenAIStream({ apiKey, systemPrompt, userPrompt, maxTokens,
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
-      max_tokens: Math.min(maxTokens, 1200),
+      max_tokens: maxTokens,
       messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: attachments.length ? [{ type: 'text', text: userPrompt }, ...attachments.filter(a => a?.kind === 'image' && /^image\//.test(a.mimeType || '') && a.data?.length < 12_000_000).map(a => ({ type: 'image_url', image_url: { url: `data:${a.mimeType};base64,${a.data}` } }))] : userPrompt }],
       stream: true,
     }),
@@ -89,8 +91,13 @@ export default async function handler(req) {
   let body
   try { body = await req.json() } catch { return new Response(JSON.stringify({ error: 'JSON inválido' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } }) }
 
-  const { systemPrompt, userPrompt, maxTokens = 800, attachments = [] } = body
+  const { systemPrompt, userPrompt, attachments = [] } = body
   const mode = body.mode === 'premium' ? 'premium' : 'free'
+  // Tope por modo: el gratuito se queda en 1200 (barato, no debe poder pedirse un informe
+  // completo sin pagar). El informe premium (REPORT_SYSTEM_PAID en useReport.js) pide 7
+  // secciones estructuradas — con 1200 se cortaba a media frase justo después de ACCIONES
+  // PRIORITARIAS, sin llegar a las últimas 3-4 secciones. 3000 le da margen real.
+  const maxTokens = Math.min(body.maxTokens || 800, mode === 'premium' ? 3000 : 1200)
   if (!systemPrompt || !userPrompt) return new Response(JSON.stringify({ error: 'Faltan prompts' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (userPrompt.length > 12000 || systemPrompt.length > 8000) return new Response(JSON.stringify({ error: 'Prompt demasiado largo' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
 
