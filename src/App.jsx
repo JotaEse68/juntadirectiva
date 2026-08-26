@@ -36,6 +36,51 @@ const PROFILE_STRUCTURE_TEXT = { solo: 'una sola persona (solopreneur)', team: '
 const PROFILE_BUDGET_TEXT = { zero: '0€/mes, solo herramientas gratuitas', some: 'hasta 100-300€/mes' }
 const PROFILE_HOURS_TEXT = { low: 'menos de 5 horas a la semana', high: '5 horas o más a la semana' }
 
+// Interruptor de dos posiciones para el perfil rápido: mismo mecanismo que las píldoras
+// (click en un lado la activa, click de nuevo la desactiva -> vuelve a null/"sin responder"),
+// pero como un único track deslizante en vez de dos botones sueltos, para que ocupe menos
+// espacio. Tres estados visuales: sin elegir (track neutro, thumb centrado), izquierda o
+// derecha (track azul metalizado, thumb pegado a ese lado).
+function ProfileToggle({ leftId, leftLabel, rightId, rightLabel, value, onChange }) {
+  const isLeft = value === leftId
+  const isRight = value === rightId
+  const isSet = isLeft || isRight
+  const thumbLeft = isLeft ? '4px' : isRight ? 'calc(100% - 34px)' : 'calc(50% - 15px)'
+  const labelStyle = (active) => ({
+    position: 'absolute', top: 0, width: '50%', height: '100%',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: '11px', fontWeight: active ? 700 : 500,
+    color: active ? '#fff' : isSet ? 'rgba(255,255,255,0.6)' : 'var(--t3)',
+    transition: 'color .2s ease', pointerEvents: 'none', padding: '0 6px', textAlign: 'center',
+  })
+  return (
+    <div
+      role="radiogroup"
+      aria-label={`${leftLabel} / ${rightLabel}`}
+      onClick={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect()
+        const target = (e.clientX - rect.left) < rect.width / 2 ? leftId : rightId
+        onChange(value === target ? null : target)
+      }}
+      style={{
+        position: 'relative', width: '156px', height: '38px', borderRadius: '999px',
+        cursor: 'pointer', userSelect: 'none', margin: '0 auto',
+        background: isSet ? 'linear-gradient(135deg, var(--blue), var(--blue-lt))' : 'var(--bg3)',
+        border: `1px solid ${isSet ? 'var(--blue-bd)' : 'var(--bd)'}`,
+        transition: 'background .25s ease, border-color .25s ease',
+      }}
+    >
+      <span style={{ ...labelStyle(isLeft), left: 0 }}>{leftLabel}</span>
+      <span style={{ ...labelStyle(isRight), right: 0 }}>{rightLabel}</span>
+      <div style={{
+        position: 'absolute', top: '4px', left: thumbLeft, width: '30px', height: '30px',
+        borderRadius: '50%', background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+        transition: 'left .25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+      }} />
+    </div>
+  )
+}
+
 function buildProfileLine(profile) {
   const parts = []
   if (profile.structure) parts.push(`Estructura: ${PROFILE_STRUCTURE_TEXT[profile.structure]}`)
@@ -503,30 +548,14 @@ function AppInner() {
                     { key: 'budget', label: t('profile.budgetLabel'), options: [['zero', t('profile.budgetZero')], ['some', t('profile.budgetSome')]] },
                     { key: 'hours', label: t('profile.hoursLabel'), options: [['low', t('profile.hoursLow')], ['high', t('profile.hoursHigh')]] },
                   ].map(group => (
-                    <div key={group.key}>
+                    <div key={group.key} style={{ textAlign: 'center' }}>
                       <p style={{ fontSize: '10px', color: 'var(--t3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '9px', fontWeight: 500 }}>{group.label}</p>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '220px' }}>
-                        {group.options.map(([id, label]) => {
-                          const isOn = profile[group.key] === id
-                          return (
-                            <button
-                              key={id}
-                              type="button"
-                              onClick={() => setProfile(prev => ({ ...prev, [group.key]: prev[group.key] === id ? null : id }))}
-                              aria-pressed={isOn}
-                              style={{
-                                padding: '6px 13px', borderRadius: '24px',
-                                border: `1px solid ${isOn ? 'var(--blue-bd)' : 'var(--bd)'}`,
-                                background: isOn ? 'var(--blue-dim)' : 'rgba(255,255,255,0.03)',
-                                color: isOn ? 'var(--blue)' : 'var(--t3)',
-                                cursor: 'pointer', fontSize: '12px', fontWeight: 500, transition: 'all .15s',
-                              }}
-                            >
-                              {label}
-                            </button>
-                          )
-                        })}
-                      </div>
+                      <ProfileToggle
+                        leftId={group.options[0][0]} leftLabel={group.options[0][1]}
+                        rightId={group.options[1][0]} rightLabel={group.options[1][1]}
+                        value={profile[group.key]}
+                        onChange={(id) => setProfile(prev => ({ ...prev, [group.key]: id }))}
+                      />
                     </div>
                   ))}
                 </div>
@@ -566,7 +595,12 @@ function AppInner() {
               </div>
 
               <fieldset className="board-mode-field" style={{ border: 0, padding: 0 }}>
-                <legend style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '10px', fontWeight: 500 }}>{t('form.deliberationPace')}</legend>
+                <legend style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '10px', fontWeight: 500 }}>
+                  {t('form.deliberationPace')}
+                  <span style={{ marginLeft: '6px', fontSize: '10px', padding: '2px 7px', borderRadius: '4px', background: 'var(--blue-dim)', color: 'var(--blue)', border: '1px solid var(--blue-bd)', textTransform: 'none', letterSpacing: 'normal', fontWeight: 600 }}>
+                    {t('form.deliberationPaceHint')}
+                  </span>
+                </legend>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
                   <button type="button" onClick={() => setBoardMode('fast')} aria-pressed={boardMode === 'fast'} style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', border: `1px solid ${boardMode === 'fast' ? 'var(--blue-bd)' : 'var(--bd)'}`, background: boardMode === 'fast' ? 'var(--blue-dim)' : 'var(--bg3)', color: 'var(--t1)', textAlign: 'left' }}><strong style={{ fontSize: '13px', color: 'var(--blue)' }}>{t('form.fastBoard')}</strong><span style={{ display: 'block', marginTop: '3px', fontSize: '11px', color: 'var(--t2)' }}>{t('form.fastBoardDesc')}</span></button>
                   <button type="button" onClick={() => (premiumAccess || apiKey || privateAccess) && setBoardMode('deep')} aria-pressed={boardMode === 'deep'} style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', border: `1px solid ${boardMode === 'deep' ? 'var(--blue-bd)' : 'var(--bd)'}`, background: boardMode === 'deep' ? 'var(--blue-dim)' : 'var(--bg3)', color: 'var(--t1)', textAlign: 'left', opacity: premiumAccess || apiKey || privateAccess ? 1 : .62 }}><strong style={{ fontSize: '13px', color: 'var(--blue)' }}>{t('form.deepBoard')} {!(premiumAccess || apiKey || privateAccess) && t('form.deepBoardPremium')}</strong><span style={{ display: 'block', marginTop: '3px', fontSize: '11px', color: 'var(--t2)' }}>{t('form.deepBoardDesc')}</span></button>
