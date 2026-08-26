@@ -39,25 +39,26 @@ textarea, input { font-family: 'Inter', sans-serif; }
 .fade-in  { animation: fadeIn  .3s ease both; }
 .slide-in { animation: slideIn .35s ease both; }
 
-/* Orden de la pantalla inicial: hero -> dolores/perfil (ambos "order:1" inline en App.jsx,
-   desempatan por su posición en el DOM) -> elige tu junta -> formulario -> qué pasa después.
-   Coincide con la secuencia de la build del hackathon. */
+/* Orden de la pantalla inicial: hero -> dolores (order:1, DOM) -> banner de precios (order:1,
+   informativo, sin botón) -> elige tu junta -> formulario -> qué pasa después. */
 .home-flow { display: flex; flex-direction: column; }
 .home-hero { order: 1; }
 .board-customization { order: 2; }
 .composer-card { order: 3; }
 
-/* Dentro del formulario: tipo de reunión -> situación -> ritmo de deliberación -> contexto
-   adicional -> aviso de privacidad -> botón -> aviso de límite diario -> modo gratuito. */
+/* Dentro del formulario: tipo de reunión -> perfil rápido -> situación -> ritmo de
+   deliberación -> contexto adicional -> aviso de privacidad -> botón -> aviso de límite
+   diario -> modo gratuito. */
 .composer-card { display: flex; flex-direction: column; }
 .composer-card .meeting-type { order: 1; }
-.composer-card .situation-field { order: 2; }
-.composer-card .board-mode-field { order: 3; }
-.composer-card .context-field { order: 4; }
-.composer-card .privacy-note { order: 5; }
-.composer-card > button { order: 6; }
-.composer-card > .daily-limit-banner { order: 7; }
-.composer-card .free-mode-note { order: 8; }
+.composer-card .profile-field { order: 2; }
+.composer-card .situation-field { order: 3; }
+.composer-card .board-mode-field { order: 4; }
+.composer-card .context-field { order: 5; }
+.composer-card .privacy-note { order: 6; }
+.composer-card > button { order: 7; }
+.composer-card > .daily-limit-banner { order: 8; }
+.composer-card .free-mode-note { order: 9; }
 
 .board-overview { order:4; margin:58px 0 12px; padding:38px 0 34px; border-top:1px solid var(--bd); border-bottom:1px solid var(--bd); text-align:center; }
 .eyebrow { margin-bottom:8px; color:var(--blue); font-size:.6875rem; font-weight:600; letter-spacing:.14em; text-transform:uppercase; }

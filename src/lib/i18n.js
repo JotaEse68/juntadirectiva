@@ -35,8 +35,7 @@ const DICT = {
     'profile.budgetSome': 'Up to $100-300/mo',
     'profile.hoursLabel': 'Weekly availability',
     'profile.hoursLow': 'Less than 5h/week',
-    'profile.hoursMid': '5-10h/week',
-    'profile.hoursFull': 'Full-time',
+    'profile.hoursHigh': '5h/week or more',
 
     'board.chooseParticipants': 'Your board · {specialists} specialists · {selected} recommended participants',
     'board.chooseHint': "Everyone's here. The active selection adapts to the challenge; click anyone to include or remove them.",
@@ -152,8 +151,7 @@ const DICT = {
     'profile.budgetSome': 'Hasta 100-300€/mes',
     'profile.hoursLabel': 'Disponibilidad semanal',
     'profile.hoursLow': 'Menos de 5h/semana',
-    'profile.hoursMid': '5-10h/semana',
-    'profile.hoursFull': 'Full-time',
+    'profile.hoursHigh': '5h/semana o más',
 
     'board.chooseParticipants': 'Tu junta directiva · {specialists} especialistas · {selected} participantes recomendados',
     'board.chooseHint': 'Todos están aquí. La selección activa se adapta al reto; pulsa sobre cualquiera para incluirlo o quitarlo.',

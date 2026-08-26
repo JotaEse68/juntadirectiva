@@ -34,7 +34,7 @@ const PENDING_SITUATION_KEY = 'junta_pending_situation'
 // a los textos de la interfaz vía t()).
 const PROFILE_STRUCTURE_TEXT = { solo: 'una sola persona (solopreneur)', team: 'equipo pequeño de 2 a 5 personas' }
 const PROFILE_BUDGET_TEXT = { zero: '0€/mes, solo herramientas gratuitas', some: 'hasta 100-300€/mes' }
-const PROFILE_HOURS_TEXT = { low: 'menos de 5 horas a la semana', mid: 'entre 5 y 10 horas a la semana', full: 'dedicación full-time' }
+const PROFILE_HOURS_TEXT = { low: 'menos de 5 horas a la semana', high: '5 horas o más a la semana' }
 
 function buildProfileLine(profile) {
   const parts = []
@@ -396,9 +396,6 @@ function AppInner() {
           <div className="home-flow">
             {/* Hero */}
             <div className="fade-up home-hero" style={{ textAlign: 'center', marginBottom: '36px' }}>
-              <div style={{ marginBottom: '30px', textAlign: 'left' }}>
-                <DownloadBanner ready={false} />
-              </div>
               <p style={{ fontSize: '11px', color: 'var(--blue)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: '16px', fontWeight: 500 }}>
                 {t('hero.kicker')}
               </p>
@@ -430,50 +427,12 @@ function AppInner() {
               ))}
             </div>
 
-            {/* Perfil rápido (opcional): mismo mecanismo que en la versión del hackathon —
-                se inyecta en `situation` vía buildProfileLine (arriba) para que los directores
-                no tengan que preguntar tiempo/presupuesto dentro del debate. `order: 1` para
-                que caiga justo después del hero, antes del formulario (composer-card, order:2). */}
-            <div className="fade-up" style={{ order: 1, textAlign: 'center', marginBottom: '36px', paddingBottom: '4px', borderBottom: '1px solid var(--bd)' }}>
-              <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '6px', fontWeight: 500 }}>
-                {t('profile.label')}
-              </p>
-              <p style={{ fontSize: '12px', color: 'var(--t3)', marginBottom: '18px', lineHeight: 1.5, maxWidth: '460px', marginLeft: 'auto', marginRight: 'auto' }}>
-                {t('profile.hint')}
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '28px', paddingBottom: '22px' }}>
-                {[
-                  { key: 'structure', label: t('profile.structureLabel'), options: [['solo', t('profile.structureSolo')], ['team', t('profile.structureTeam')]] },
-                  { key: 'budget', label: t('profile.budgetLabel'), options: [['zero', t('profile.budgetZero')], ['some', t('profile.budgetSome')]] },
-                  { key: 'hours', label: t('profile.hoursLabel'), options: [['low', t('profile.hoursLow')], ['mid', t('profile.hoursMid')], ['full', t('profile.hoursFull')]] },
-                ].map(group => (
-                  <div key={group.key}>
-                    <p style={{ fontSize: '10px', color: 'var(--t3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '9px', fontWeight: 500 }}>{group.label}</p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '220px' }}>
-                      {group.options.map(([id, label]) => {
-                        const isOn = profile[group.key] === id
-                        return (
-                          <button
-                            key={id}
-                            type="button"
-                            onClick={() => setProfile(prev => ({ ...prev, [group.key]: prev[group.key] === id ? null : id }))}
-                            aria-pressed={isOn}
-                            style={{
-                              padding: '6px 13px', borderRadius: '24px',
-                              border: `1px solid ${isOn ? 'var(--blue-bd)' : 'var(--bd)'}`,
-                              background: isOn ? 'var(--blue-dim)' : 'rgba(255,255,255,0.03)',
-                              color: isOn ? 'var(--blue)' : 'var(--t3)',
-                              cursor: 'pointer', fontSize: '12px', fontWeight: 500, transition: 'all .15s',
-                            }}
-                          >
-                            {label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {/* Banner de precios (informativo, sin botón — ready=false): antes vivía justo
+                encima del hero; ahora va aquí, después del gancho emocional y las tarjetas de
+                dolor, para no vender antes de enganchar, pero sigue arriba del todo para que
+                no quede enterrado. */}
+            <div className="fade-up" style={{ order: 1 }}>
+              <DownloadBanner ready={false} />
             </div>
 
             {/* El elenco — pills seleccionables: quién participa en esta sesión */}
@@ -532,6 +491,51 @@ function AppInner() {
                       <div style={{ fontSize: '13px', fontWeight: 600, color: meetingType === mt.id ? 'var(--blue)' : 'var(--t1)', marginBottom: '2px' }}>{t(`meeting.${mt.id}`)}</div>
                       <div style={{ fontSize: '11px', color: 'var(--t3)' }}>{t(`meeting.${mt.id}Desc`)}</div>
                     </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Perfil rápido (opcional): se inyecta en `situation` vía buildProfileLine
+                  (arriba) para que los directores no tengan que preguntar tiempo/presupuesto
+                  dentro del debate. Debajo de "Tipo de reunión", antes de la situación. */}
+              <div className="profile-field" style={{ textAlign: 'center', paddingTop: '4px', borderTop: '1px solid var(--bd)' }}>
+                <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginTop: '18px', marginBottom: '6px', fontWeight: 500 }}>
+                  {t('profile.label')}
+                </p>
+                <p style={{ fontSize: '12px', color: 'var(--t3)', marginBottom: '16px', lineHeight: 1.5, maxWidth: '460px', marginLeft: 'auto', marginRight: 'auto' }}>
+                  {t('profile.hint')}
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '24px' }}>
+                  {[
+                    { key: 'structure', label: t('profile.structureLabel'), options: [['solo', t('profile.structureSolo')], ['team', t('profile.structureTeam')]] },
+                    { key: 'budget', label: t('profile.budgetLabel'), options: [['zero', t('profile.budgetZero')], ['some', t('profile.budgetSome')]] },
+                    { key: 'hours', label: t('profile.hoursLabel'), options: [['low', t('profile.hoursLow')], ['high', t('profile.hoursHigh')]] },
+                  ].map(group => (
+                    <div key={group.key}>
+                      <p style={{ fontSize: '10px', color: 'var(--t3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '9px', fontWeight: 500 }}>{group.label}</p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '220px' }}>
+                        {group.options.map(([id, label]) => {
+                          const isOn = profile[group.key] === id
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={() => setProfile(prev => ({ ...prev, [group.key]: prev[group.key] === id ? null : id }))}
+                              aria-pressed={isOn}
+                              style={{
+                                padding: '6px 13px', borderRadius: '24px',
+                                border: `1px solid ${isOn ? 'var(--blue-bd)' : 'var(--bd)'}`,
+                                background: isOn ? 'var(--blue-dim)' : 'rgba(255,255,255,0.03)',
+                                color: isOn ? 'var(--blue)' : 'var(--t3)',
+                                cursor: 'pointer', fontSize: '12px', fontWeight: 500, transition: 'all .15s',
+                              }}
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
