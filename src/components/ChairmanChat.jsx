@@ -5,7 +5,7 @@ import { downloadChairmanReplyPdf } from '../lib/reportPdf.js'
 import { useI18n } from '../lib/i18n.js'
 
 export default function ChairmanChat({ messages, sending, error, freeMessagesUsed, hasKey, premiumAccess, onSend, situation }) {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const [input, setInput] = useState('')
   const [attachment, setAttachment] = useState(null)
   const [attachmentError, setAttachmentError] = useState(null)
@@ -59,7 +59,7 @@ export default function ChairmanChat({ messages, sending, error, freeMessagesUse
                   {m.content || (sending && i === messages.length - 1 ? '···' : '')}
                 </p>
                 {m.attachments?.length > 0 && <p style={{ marginTop: '6px', fontSize: '10px', color: 'var(--blue)' }}>📎 {m.attachments.join(', ')}</p>}
-                {m.role === 'assistant' && m.content && premiumAccess && <button onClick={() => downloadChairmanReplyPdf({ situation, reply: m.content })} style={{ marginTop: '9px', padding: '6px 9px', borderRadius: '6px', border: '1px solid var(--blue-bd)', background: 'var(--blue-dim)', color: 'var(--blue)', fontSize: '11px', fontWeight: 700 }}>{t('chairman.saveAsPdf')}</button>}
+                {m.role === 'assistant' && m.content && premiumAccess && <button onClick={() => downloadChairmanReplyPdf({ situation, reply: m.content, lang })} style={{ marginTop: '9px', padding: '6px 9px', borderRadius: '6px', border: '1px solid var(--blue-bd)', background: 'var(--blue-dim)', color: 'var(--blue)', fontSize: '11px', fontWeight: 700 }}>{t('chairman.saveAsPdf')}</button>}
               </div>
             </div>
           ))}

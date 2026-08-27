@@ -20,6 +20,9 @@ export default async function handler(req) {
   let body
   try { body = await req.json() } catch { return new Response(JSON.stringify({ error: 'JSON inválido' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } }) }
 
+  // Sin tope propio: es la cuenta del usuario, no la nuestra — capar aquí a 1200 cortaba en
+  // seco el informe de pago (pide 7500) para cualquiera que use su propia key de Gemini,
+  // mientras que la misma compra con la key del servidor (api/coach.js) llegaba completa.
   const { apiKey, model = 'gemini-flash-latest', system, userPrompt, maxTokens = 800, attachments = [] } = body
   if (!apiKey) return new Response(JSON.stringify({ error: 'Falta la API key de Gemini' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (!system || !userPrompt) return new Response(JSON.stringify({ error: 'Faltan prompts' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
@@ -35,7 +38,7 @@ export default async function handler(req) {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: system }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }, ...attachments.filter(a => a?.kind === 'image' && /^image\//.test(a.mimeType || '') && a.data?.length < 12_000_000).map(a => ({ inline_data: { mime_type: a.mimeType, data: a.data } }))] }],
-        generationConfig: { maxOutputTokens: Math.min(maxTokens, 1200) },
+        generationConfig: { maxOutputTokens: maxTokens },
       }),
     })
   } catch { return new Response(JSON.stringify({ error: 'Error conectando con Gemini' }), { status: 502, headers: { ...c, 'Content-Type': 'application/json' } }) }

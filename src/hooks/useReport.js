@@ -151,7 +151,7 @@ Produce el informe siguiendo exactamente la estructura indicada.`
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   const reset = useCallback(() => { setReport(null); setError(null) }, [])
 

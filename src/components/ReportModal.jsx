@@ -109,9 +109,9 @@ function renderRichText(rawText) {
 }
 
 export default function ReportModal({ situation, verdict, report, loading, error, onClose, onUpgrade, upgrading }) {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const handleDownload = () => {
-    downloadExecutiveReportPdf({ situation, verdict, report })
+    downloadExecutiveReportPdf({ situation, verdict, report, lang })
   }
 
   return (

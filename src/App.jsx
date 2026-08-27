@@ -214,6 +214,10 @@ function AppInner() {
                 if (parsed.situation != null) setSituation(parsed.situation)
                 if (parsed.meetingType) setMeetingType(parsed.meetingType)
                 if (parsed.selectedIds) setSelectedIds(parsed.selectedIds)
+                // El redirect a Stripe es una navegación completa: I18nProvider vuelve a su
+                // valor por defecto ('es') al recargar. Sin restaurar esto aquí, un usuario
+                // que debatía en inglés vuelve de pagar y se encuentra la UI en español.
+                if (parsed.lang) setLang(parsed.lang)
               }
             } catch {}
             sessionStorage.removeItem(PENDING_SITUATION_KEY)
@@ -258,7 +262,13 @@ function AppInner() {
               if (parsed.situation != null) setSituation(parsed.situation)
               addReportCredits(-1) // solo refleja en pantalla el crédito que generateReport va a consumir de inmediato en el servidor
               setShowReport(true)
-              generateReport({ ...parsed, apiKey: null, provider: 'claude', tier: 'paid', lang })
+              // parsed.lang (guardado justo antes del redirect a Stripe) se pasa explícito a
+              // generateReport en vez de depender de la variable `lang` de este cierre: setLang
+              // de abajo no se refleja en `lang` hasta el próximo render, así que usar el
+              // cierre aquí generaría el informe en el idioma por defecto ('es'), no en el que
+              // el usuario tenía activo antes de pagar.
+              if (parsed.lang) setLang(parsed.lang)
+              generateReport({ ...parsed, apiKey: null, provider: 'claude', tier: 'paid', lang: parsed.lang || 'es' })
             }
           } catch {}
           sessionStorage.removeItem(PENDING_REPORT_KEY)
@@ -269,7 +279,7 @@ function AppInner() {
         clearUrl()
       }
     })()
-  }, [addReportCredits, generateReport])
+  }, [addReportCredits, generateReport, t, setLang])
 
   const consensus = useMemo(() => computeConsensus(directorStates), [directorStates])
 
@@ -296,7 +306,7 @@ function AppInner() {
       // recién comprado sobre él en cuanto se vuelva (ver el efecto de checkout_session_id).
       if (isDone && verdict) {
         try {
-          sessionStorage.setItem(PENDING_REPORT_KEY, JSON.stringify({ situation, meetingType, activeDirectors, directorStates, verdict }))
+          sessionStorage.setItem(PENDING_REPORT_KEY, JSON.stringify({ situation, meetingType, activeDirectors, directorStates, verdict, lang }))
         } catch {}
       }
       window.location.href = data.url
@@ -373,7 +383,7 @@ function AppInner() {
       // hay debate que retomar, pero al menos se evita que el usuario tenga que reescribir
       // lo que ya había tecleado.
       try {
-        sessionStorage.setItem(PENDING_SITUATION_KEY, JSON.stringify({ situation, meetingType, selectedIds }))
+        sessionStorage.setItem(PENDING_SITUATION_KEY, JSON.stringify({ situation, meetingType, selectedIds, lang }))
       } catch {}
       window.location.href = data.url
     } catch (err) {

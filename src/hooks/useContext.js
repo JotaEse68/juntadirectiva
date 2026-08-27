@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useI18n } from '../lib/i18n.js'
 
 // Extrae texto de PDF usando pdf.js desde CDN
 async function extractPDF(file) {
@@ -48,6 +49,7 @@ function isUsefulSummary(summary) {
 }
 
 export function useContextBuilder() {
+  const { t, lang } = useI18n()
   const [items, setItems]     = useState([]) // { id, type, name, status, summary, error }
   const [processing, setProcessing] = useState(false)
 
@@ -68,7 +70,7 @@ export function useContextBuilder() {
 
   // Envía al servidor para resumir
   const summarizeViaServer = async (type, payload, apiKey, provider) => {
-    const body = { type, clientApiKey: apiKey || undefined, provider: provider || 'claude', ...payload }
+    const body = { type, clientApiKey: apiKey || undefined, provider: provider || 'claude', lang, ...payload }
     const res = await fetch('/api/context', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -85,11 +87,11 @@ export function useContextBuilder() {
     const id = addItem({ type: 'file', name: file.name, status: 'extracting' })
 
     if (!['pdf', 'doc', 'docx', 'md'].includes(ext)) {
-      updateItem(id, { status: 'error', error: 'Solo se admiten PDF, Word (.doc, .docx) y Markdown (.md)' })
+      updateItem(id, { status: 'error', error: t('context.onlyPdfWordMd') })
       return
     }
     if (file.size > 20 * 1024 * 1024) {
-      updateItem(id, { status: 'error', error: 'Archivo demasiado grande (máx 20MB)' })
+      updateItem(id, { status: 'error', error: t('context.fileTooLarge') })
       return
     }
 
@@ -105,7 +107,7 @@ export function useContextBuilder() {
       }
 
       if (!extracted.trim()) {
-        updateItem(id, { status: 'error', error: 'No se pudo extraer texto del archivo' })
+        updateItem(id, { status: 'error', error: t('context.couldNotExtractText') })
         return
       }
 
@@ -114,50 +116,54 @@ export function useContextBuilder() {
       // 2. Resumir via servidor
       const summary = await summarizeViaServer('extracted', { content: extracted }, apiKey, provider)
       if (!isUsefulSummary(summary)) {
-        throw new Error('No se pudo obtener un resumen útil del documento. Prueba con un PDF que contenga texto seleccionable o añade una breve descripción.')
+        throw new Error(t('context.couldNotSummarizeDoc'))
       }
       updateItem(id, { status: 'done', summary })
 
     } catch (err) {
-      updateItem(id, { status: 'error', error: err.message || 'Error procesando archivo' })
+      updateItem(id, { status: 'error', error: err.message || t('context.processingFileError') })
     }
-  }, [addItem, updateItem])
+  }, [addItem, updateItem, t])
 
   // Procesa una URL
   const processURL = useCallback(async (url, apiKey, provider) => {
     if (!url.trim()) return
-    try { new URL(url) } catch {
-      return { error: 'URL inválida' }
-    }
-
+    // Antes de este fix, una URL inválida devolvía { error } sin crear ningún item — el
+    // panel (ContextPanel.jsx) no comprueba el valor de retorno, así que el usuario veía el
+    // panel cerrarse sin ningún aviso, como si hubiera funcionado. Ahora sigue el mismo
+    // patrón que el resto del archivo: siempre crea el item primero y lo marca en error.
     const id = addItem({ type: 'url', name: url, status: 'fetching' })
+    try { new URL(url) } catch {
+      updateItem(id, { status: 'error', error: t('context.invalidUrl') })
+      return
+    }
 
     try {
       const summary = await summarizeViaServer('url', { url }, apiKey, provider)
-      if (!isUsefulSummary(summary)) throw new Error('No se pudo obtener un resumen útil de la página.')
+      if (!isUsefulSummary(summary)) throw new Error(t('context.couldNotSummarizePage'))
       updateItem(id, { status: 'done', summary })
     } catch (err) {
-      updateItem(id, { status: 'error', error: err.message || 'No se pudo acceder a la URL' })
+      updateItem(id, { status: 'error', error: err.message || t('context.couldNotAccessUrl') })
     }
-  }, [addItem, updateItem])
+  }, [addItem, updateItem, t])
 
   // Añade una nota de texto libre
   const addNote = useCallback(async (text, apiKey, provider) => {
     if (!text.trim()) return
-    const id = addItem({ type: 'note', name: 'Nota', status: 'summarizing' })
+    const id = addItem({ type: 'note', name: t('context.noteName'), status: 'summarizing' })
     try {
       // Notas cortas: pasar directas sin resumir
       if (text.length < 600) {
         updateItem(id, { status: 'done', summary: text.trim() })
       } else {
         const summary = await summarizeViaServer('note', { content: text }, apiKey, provider)
-        if (!isUsefulSummary(summary)) throw new Error('No se pudo obtener un resumen útil de la nota.')
+        if (!isUsefulSummary(summary)) throw new Error(t('context.couldNotSummarizeNote'))
         updateItem(id, { status: 'done', summary })
       }
     } catch (err) {
       updateItem(id, { status: 'error', error: err.message })
     }
-  }, [addItem, updateItem])
+  }, [addItem, updateItem, t])
 
   // Construye el bloque de contexto para los directores
   const buildContextBlock = useCallback(() => {

@@ -108,7 +108,7 @@ export default async function handler(req) {
   const { ok, remaining, resetAt } = checkRate(ip)
   if (!ok) {
     const min = Math.ceil((resetAt - Date.now()) / 60000)
-    return new Response(JSON.stringify({ error: `Límite de uso gratuito alcanzado por esta hora. Vuelve en ${min} min o usa tu propia API key para uso ilimitado.`, code: 'RATE_LIMITED', resetAt }), {
+    return new Response(JSON.stringify({ error: `Límite de uso gratuito alcanzado por esta hora. Vuelve en ${min} min.`, code: 'RATE_LIMITED', resetAt }), {
       status: 429, headers: { ...c, 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil((resetAt - Date.now()) / 1000)) }
     })
   }
@@ -119,9 +119,9 @@ export default async function handler(req) {
   const { systemPrompt, userPrompt, attachments = [] } = body
   const mode = body.mode === 'premium' ? 'premium' : 'free'
   // Tope por modo: el gratuito se queda en 1200 (barato, no debe poder pedirse un informe
-  // completo sin pagar). El informe premium (REPORT_SYSTEM_PAID en useReport.js) pide 7
-  // secciones estructuradas — con 1200 se cortaba a media frase justo después de ACCIONES
-  // PRIORITARIAS, sin llegar a las últimas 3-4 secciones. 3000 le da margen real.
+  // completo sin pagar). El informe premium (buildReportSystem en useReport.js) pide 10
+  // secciones estructuradas — 7500 es el margen que en pruebas reales cubre incluso los
+  // informes más largos sin cortar la despedida final a media frase.
   const maxTokens = Math.min(body.maxTokens || 800, mode === 'premium' ? 7500 : 1200)
   if (!systemPrompt || !userPrompt) return new Response(JSON.stringify({ error: 'Faltan prompts' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (userPrompt.length > 12000 || systemPrompt.length > 8000) return new Response(JSON.stringify({ error: 'Prompt demasiado largo' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })

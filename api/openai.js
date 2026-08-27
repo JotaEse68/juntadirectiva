@@ -20,6 +20,9 @@ export default async function handler(req) {
   let body
   try { body = await req.json() } catch { return new Response(JSON.stringify({ error: 'JSON inválido' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } }) }
 
+  // Sin tope propio: es la cuenta del usuario, no la nuestra — capar aquí a 1200 cortaba en
+  // seco el informe de pago (pide 7500) para cualquiera que use su propia key de OpenAI,
+  // mientras que la misma compra con la key del servidor (api/coach.js) llegaba completa.
   const { apiKey, model = 'gpt-4o-mini', system, userPrompt, maxTokens = 800, attachments = [] } = body
   if (!apiKey) return new Response(JSON.stringify({ error: 'Falta la API key de OpenAI' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (!system || !userPrompt) return new Response(JSON.stringify({ error: 'Faltan prompts' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
@@ -32,7 +35,7 @@ export default async function handler(req) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
-        max_tokens: Math.min(maxTokens, 1200),
+        max_tokens: maxTokens,
         messages: [{ role: 'system', content: system }, { role: 'user', content: attachments.length ? [{ type: 'text', text: userPrompt }, ...attachments.filter(a => a?.kind === 'image' && /^image\//.test(a.mimeType || '') && a.data?.length < 12_000_000).map(a => ({ type: 'image_url', image_url: { url: `data:${a.mimeType};base64,${a.data}` } }))] : userPrompt }],
         stream: true,
       }),
