@@ -141,7 +141,7 @@ async function summarizeOpenAI(userPrompt, apiKey, lang) {
       messages: [{ role: 'system', content: summarySystemPrompt(lang) }, { role: 'user', content: userPrompt }],
     }),
   })
-  if (!res.ok) throw new Error(`OpenAI error ${res.status}`)
+  if (!res.ok) { const e = new Error(`OpenAI error ${res.status}`); e.status = res.status; throw e }
   const data = await res.json()
   return data.choices?.[0]?.message?.content || ''
 }
@@ -163,10 +163,24 @@ async function summarizeGemini(userPrompt, apiKey, lang) {
 }
 
 // Resume el texto con el proveedor elegido. En gratuito se usa GPT-4o mini si está configurado.
-async function summarize(text, sourceType, apiKey, provider, lang) {
+// allowFallback solo es true con la key del propio servidor (no con la que trae el usuario en
+// Ajustes) — mismo criterio y mismo fallback que api/coach.js: una cuenta de OpenAI sin saldo
+// devuelve 429, y sin este respaldo el análisis de contexto entero queda caído en vez de
+// simplemente pasar a Claude, que es justo lo que se detectó probando en vivo tras un cambio
+// sin relación (la consolidación de la extracción de PDF) — este bug ya estaba ahí antes.
+async function summarize(text, sourceType, apiKey, provider, lang, allowFallback) {
   const userPrompt = `Analiza este contenido (${sourceType}) y extrae el briefing ejecutivo:\n\n${text}`
-  if (provider === 'openai') return summarizeOpenAI(userPrompt, apiKey, lang)
   if (provider === 'gemini') return summarizeGemini(userPrompt, apiKey, lang)
+  if (provider === 'openai') {
+    try {
+      return await summarizeOpenAI(userPrompt, apiKey, lang)
+    } catch (err) {
+      if (allowFallback && (err.status === 429 || err.status >= 500) && process.env.ANTHROPIC_API_KEY) {
+        return summarizeClaude(userPrompt, process.env.ANTHROPIC_API_KEY, lang)
+      }
+      throw err
+    }
+  }
   return summarizeClaude(userPrompt, apiKey, lang)
 }
 
@@ -243,7 +257,7 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ error: m.unsupportedType }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
     }
 
-    const summary = await summarize(rawText, sourceType, apiKey, provider, lang)
+    const summary = await summarize(rawText, sourceType, apiKey, provider, lang, !clientApiKey)
     if (!isUsefulSummary(summary)) {
       return new Response(JSON.stringify({ error: m.notUseful }), {
         status: 422, headers: { ...c, 'Content-Type': 'application/json' }
