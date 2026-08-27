@@ -8,7 +8,7 @@ import { useI18n } from '../lib/i18n.js'
 // usuario, así que la instrucción de idioma va como primera línea del system prompt (ver
 // useBoard.js, donde una versión solo-en-userMsg de esto se probó en vivo y no funcionó).
 function languageSystemDirective(lang) {
-  return lang === 'en' ? 'IMPORTANT: Write your entire reply in English — natural, warm and direct, not a literal translation. This applies to every line, including any closing conviction statement.\n\n' : ''
+  return lang === 'en' ? 'IMPORTANT: Write your entire reply in English — natural, warm and direct, not a literal translation. This applies to every line, including the closing conviction line described below in Spanish: write it in English as "High conviction." / "Medium conviction." / "Conditional conviction on: [what]." — never use the Spanish word "convicción".\n\n' : ''
 }
 
 // Opinión exprés (2-3 frases) de un director que no participó en el debate en vivo —

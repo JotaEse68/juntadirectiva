@@ -12,7 +12,7 @@ import { useI18n } from '../lib/i18n.js'
 // system prompt (más peso que en medio o al final) y se repite al final del user message
 // como refuerzo.
 function languageSystemDirective(lang) {
-  return lang === 'en' ? 'IMPORTANT: Write your entire reply in English — natural, warm and direct, not a literal translation. This applies to every line, including any closing conviction statement.\n\n' : ''
+  return lang === 'en' ? 'IMPORTANT: Write your entire reply in English — natural, warm and direct, not a literal translation. This applies to every line, including the closing conviction line described below in Spanish: write it in English as "High conviction." / "Medium conviction." / "Conditional conviction on: [what]." — never use the Spanish word "convicción".\n\n' : ''
 }
 function languageDirective(lang) {
   return lang === 'en' ? '\n\n(Reminder: answer in English.)' : ''
