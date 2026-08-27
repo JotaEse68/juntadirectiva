@@ -1,6 +1,8 @@
 import React from 'react'
 import { downloadExecutiveReportPdf } from '../lib/reportPdf.js'
 
+// El informe puede llegar con encabezados en español o en inglés (ver buildReportSystem
+// en useReport.js, que elige el set según el idioma de la UI) — ambos deben reconocerse aquí.
 const KNOWN_HEADERS = [
   'PRIMERA VICTORIA 48 HORAS',
   'PLAN DE 3 SEMANAS',
@@ -12,6 +14,16 @@ const KNOWN_HEADERS = [
   'RIESGOS Y CÓMO EVITARLOS',
   'SI OCURRE ESTO HAZ AQUELLO',
   'TU LISTA DE CONFIRMACIÓN',
+  'FIRST WIN IN 48 HOURS',
+  '3 WEEK PLAN',
+  'ESSENTIAL ACTIONS',
+  'IMPORTANT ACTIONS',
+  'ACTIONS FOR LATER',
+  'YOU OR A FREELANCER',
+  'SIGNALS TO WATCH',
+  'RISKS AND HOW TO AVOID THEM',
+  'IF THIS HAPPENS DO THAT',
+  'YOUR CONFIRMATION CHECKLIST',
 ]
 
 const SECTION_ICONS = {
@@ -25,6 +37,16 @@ const SECTION_ICONS = {
   'RIESGOS Y CÓMO EVITARLOS': '⚠️',
   'SI OCURRE ESTO HAZ AQUELLO': '🔀',
   'TU LISTA DE CONFIRMACIÓN': '✔️',
+  'FIRST WIN IN 48 HOURS': '⚡',
+  '3 WEEK PLAN': '🗓️',
+  'ESSENTIAL ACTIONS': '🎯',
+  'IMPORTANT ACTIONS': '✅',
+  'ACTIONS FOR LATER': '🌱',
+  'YOU OR A FREELANCER': '🙋',
+  'SIGNALS TO WATCH': '📊',
+  'RISKS AND HOW TO AVOID THEM': '⚠️',
+  'IF THIS HAPPENS DO THAT': '🔀',
+  'YOUR CONFIRMATION CHECKLIST': '✔️',
 }
 
 function iconForTitle(title) {
@@ -127,7 +149,7 @@ export default function ReportModal({ situation, verdict, report, loading, error
           {report && !loading && (
             <>
               {parseSections(report.text).map((section, i) => {
-                const isChecklist = section.title.toUpperCase().startsWith('TU LISTA DE CONFIRMACIÓN')
+                const isChecklist = section.title.toUpperCase().startsWith('TU LISTA DE CONFIRMACIÓN') || section.title.toUpperCase().startsWith('YOUR CONFIRMATION CHECKLIST')
                 let pastDivider = false
                 return (
                   <div key={i} style={{ marginBottom: '26px' }}>

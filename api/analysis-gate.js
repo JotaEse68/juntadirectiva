@@ -6,6 +6,9 @@ export const config = { runtime: 'edge' }
 
 const FREE_DAILY_LIMIT = 2
 const KEY_TTL_SECONDS = 26 * 60 * 60 // 26h: cubre el día completo con margen de zona horaria
+// Los créditos de informe (comprados, no diarios) no deben caducar en uso normal — 2 años
+// es solo higiene de KV para no acumular claves de sesiones abandonadas para siempre.
+const CREDIT_TTL_SECONDS = 2 * 365 * 24 * 60 * 60
 
 function cors() {
   return {
@@ -108,6 +111,59 @@ async function grantExtra(ip, sessionId) {
   return { granted: true }
 }
 
+// El informe de pago (api/coach.js en modo 'premium') no tenía NINGUNA verificación
+// server-side de que se hubiera pagado — solo dependía de un contador en localStorage que
+// cualquiera puede editar desde la consola del navegador, o de llamar a /api/coach
+// directamente. Este par de funciones cierra eso: grantReport verifica el pago con Stripe
+// y solo entonces acredita en KV (con el mismo candado anti-repetición que grantExtra:
+// sin él, se podría reenviar el mismo sessionId ya pagado una y otra vez para créditos
+// infinitos); consumeReportCredit descuenta 1 crédito real antes de generar cada informe.
+async function grantReport(ip, sessionId) {
+  const secretKey = process.env.STRIPE_SECRET_KEY
+  if (!secretKey) throw new Error('Stripe no configurado')
+
+  const stripeRes = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, {
+    headers: { Authorization: `Bearer ${secretKey}` },
+  })
+  const session = await stripeRes.json()
+  if (!stripeRes.ok) throw new Error(session.error?.message || 'Sesión no encontrada')
+  const product = session.metadata?.product
+  if (session.payment_status !== 'paid' || (product !== 'single' && product !== 'bundle')) {
+    return { granted: false }
+  }
+
+  // Mismo orden que grantExtra: acreditar antes de marcar como canjeada, nunca al revés.
+  const grantKey = `grant:${sessionId}`
+  const alreadyGranted = await kvGetInt(grantKey)
+  if (alreadyGranted) return { granted: false, alreadyGranted: true }
+
+  const creditsToAdd = product === 'bundle' ? 3 : 1
+  const creditsKey = `report_credits:${ip}`
+  const total = await kvIncrBy(creditsKey, creditsToAdd)
+  await kvExpire(creditsKey, CREDIT_TTL_SECONDS)
+
+  // Cualquier compra de informe (single o bundle) desbloquea también el acceso premium
+  // general (Junta profunda, chat sin límite) — no es un recurso que se consuma por uso.
+  const premiumKey = `premium_access:${ip}`
+  await kvSetNX(premiumKey, '1')
+  await kvExpire(premiumKey, CREDIT_TTL_SECONDS)
+
+  await kvSetNX(grantKey, '1')
+  await kvExpire(grantKey, 7 * 24 * 60 * 60)
+
+  return { granted: true, credits: total }
+}
+
+async function consumeReportCredit(ip) {
+  const creditsKey = `report_credits:${ip}`
+  const remaining = await kvDecr(creditsKey)
+  if (remaining < 0) {
+    await kvIncr(creditsKey) // deshace el decremento: no hay crédito real que gastar
+    return { allowed: false }
+  }
+  return { allowed: true, remaining }
+}
+
 export default async function handler(req) {
   const c = cors()
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: c })
@@ -123,7 +179,7 @@ export default async function handler(req) {
   if (body.action === 'check') {
     const result = await checkAndConsume(ip)
     if (!result.allowed) {
-      return new Response(JSON.stringify({ allowed: false, error: 'Sin análisis gratis hoy. Compra análisis extra para seguir analizando.' }), {
+      return new Response(JSON.stringify({ allowed: false, code: 'NO_FREE_ANALYSES', error: 'Sin análisis gratis hoy. Compra análisis extra para seguir analizando.' }), {
         status: 429, headers: { ...c, 'Content-Type': 'application/json' }
       })
     }
@@ -138,6 +194,26 @@ export default async function handler(req) {
     } catch (err) {
       return new Response(JSON.stringify({ error: err.message || 'Error verificando el pago' }), { status: 502, headers: { ...c, 'Content-Type': 'application/json' } })
     }
+  }
+
+  if (body.action === 'grant-report') {
+    if (!body.sessionId) return new Response(JSON.stringify({ error: 'sessionId requerido' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
+    try {
+      const result = await grantReport(ip, body.sessionId)
+      return new Response(JSON.stringify(result), { status: 200, headers: { ...c, 'Content-Type': 'application/json' } })
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message || 'Error verificando el pago' }), { status: 502, headers: { ...c, 'Content-Type': 'application/json' } })
+    }
+  }
+
+  if (body.action === 'consume-report') {
+    const result = await consumeReportCredit(ip)
+    if (!result.allowed) {
+      return new Response(JSON.stringify({ allowed: false, code: 'NO_REPORT_CREDITS', error: 'No tienes créditos de informe disponibles.' }), {
+        status: 402, headers: { ...c, 'Content-Type': 'application/json' }
+      })
+    }
+    return new Response(JSON.stringify(result), { status: 200, headers: { ...c, 'Content-Type': 'application/json' } })
   }
 
   return new Response(JSON.stringify({ error: 'Acción no soportada' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })

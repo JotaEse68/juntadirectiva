@@ -1,6 +1,8 @@
 import React from 'react'
+import { useI18n } from '../lib/i18n.js'
 
 export default function DailyLimitBanner({ error, onBuyExtra, buying }) {
+  const { t } = useI18n()
   return (
     <div className="daily-limit-banner" style={{
       background: 'var(--bg2)', border: '1px solid var(--red-bd)', borderRadius: 'var(--r-md)',
@@ -18,7 +20,7 @@ export default function DailyLimitBanner({ error, onBuyExtra, buying }) {
           fontSize: '13px', fontWeight: 700, cursor: buying ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
         }}
       >
-        {buying ? 'Procesando...' : '3 análisis extra · 2,99 €'}
+        {buying ? t('dailyLimit.processing') : t('dailyLimit.extraPrice')}
       </button>
     </div>
   )

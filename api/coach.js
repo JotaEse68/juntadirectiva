@@ -28,6 +28,31 @@ function checkRate(ip) {
   return { ok: true, remaining: RATE_LIMIT_MAX - e.count, resetAt: e.windowStart + RATE_LIMIT_WINDOW_MS }
 }
 
+// El modo 'premium' (informe de pago + sus quick-takes) no puede confiarse a que el propio
+// cliente diga "soy premium": eso es exactamente lo que permitía generar el informe gratis
+// editando localStorage. Antes de gastar tokens de pago, se comprueba en KV la misma bandera
+// que api/analysis-gate.js activa al confirmar un pago real con Stripe (grantReport).
+async function kvCommand(path) {
+  const base = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN
+  if (!base || !token) throw new Error('KV no configurado')
+  const res = await fetch(`${base}${path}`, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) throw new Error(`KV error ${res.status}`)
+  const data = await res.json()
+  return data.result
+}
+
+async function hasPremiumAccess(ip) {
+  try {
+    const v = await kvCommand(`/get/${encodeURIComponent(`premium_access:${ip}`)}`)
+    return Boolean(v)
+  } catch (err) {
+    console.error('coach premium-check KV error:', err)
+    // Si KV está caído no podemos verificar el pago: negar por defecto, no aceptar.
+    return false
+  }
+}
+
 function cors(origin) {
   const allowed = process.env.ALLOWED_ORIGIN || '*'
   return {
@@ -100,6 +125,15 @@ export default async function handler(req) {
   const maxTokens = Math.min(body.maxTokens || 800, mode === 'premium' ? 7500 : 1200)
   if (!systemPrompt || !userPrompt) return new Response(JSON.stringify({ error: 'Faltan prompts' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (userPrompt.length > 12000 || systemPrompt.length > 8000) return new Response(JSON.stringify({ error: 'Prompt demasiado largo' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
+
+  // El navegador nunca trae su propia API key hasta aquí (aiClient.js llama directo al
+  // proveedor en ese caso) — mode:'premium' sin haber pagado era el hueco real. Se exige
+  // la bandera que api/analysis-gate.js solo activa tras confirmar el pago con Stripe.
+  if (mode === 'premium' && !(await hasPremiumAccess(ip))) {
+    return new Response(JSON.stringify({ error: 'Esta función requiere haber comprado el informe o el plan de acción.', code: 'PAYMENT_REQUIRED' }), {
+      status: 402, headers: { ...c, 'Content-Type': 'application/json' }
+    })
+  }
 
   // El modelo lo decide el servidor: el navegador solo puede pedir modo gratuito o premium.
   // Si todavía no existe OPENAI_API_KEY, el modo gratuito conserva un fallback a Claude.

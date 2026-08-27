@@ -1,6 +1,8 @@
 import React from 'react'
+import { useI18n } from '../lib/i18n.js'
 
 export default function DownloadBanner({ ready = true, loading, credits, onGenerate, onBuy, buying }) {
+  const { t } = useI18n()
   const hasCredits = credits > 0
 
   return (
@@ -16,46 +18,44 @@ export default function DownloadBanner({ ready = true, loading, credits, onGener
     }}>
       <div style={{ flex: '1 1 250px', minWidth: '220px' }}>
         <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: '7px' }}>
-          {ready ? 'Tu siguiente movimiento' : 'Más allá del análisis'}
+          {ready ? t('download.readyKicker') : t('download.notReadyKicker')}
         </p>
         <p style={{ fontFamily: "'Playfair Display', serif", fontSize: '22px', lineHeight: 1.2, color: 'var(--t1)', marginBottom: '8px' }}>
-          {ready ? 'Convierte la recomendación en avance.' : 'Claridad para decidir. Dirección para ejecutar.'}
+          {ready ? t('download.readyTitle') : t('download.notReadyTitle')}
         </p>
         <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.6, maxWidth: '390px' }}>
-          {ready
-            ? 'Ya sabes qué piensa la junta. El plan de acción traduce esa conclusión a responsables, plazos y señales concretas.'
-            : 'La junta te da un veredicto gratis. Si luego necesitas llevarlo a la realidad, podrás convertirlo en un plan operativo.'}
+          {ready ? t('download.readyBody') : t('download.notReadyBody')}
         </p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(125px, 1fr))', gap: '12px', flex: '1 1 270px' }}>
         <div style={{ paddingLeft: '12px', borderLeft: '2px solid var(--bd)' }}>
-          <p style={{ fontSize: '10px', color: 'var(--t3)', letterSpacing: '.08em', fontWeight: 700, marginBottom: '4px' }}>01 · ANALIZAR</p>
-          <p style={{ fontSize: '12px', color: 'var(--t1)', lineHeight: 1.45 }}>Veredicto, consensos, riesgo principal y próximos pasos.</p>
-          <p style={{ fontSize: '11px', color: 'var(--t3)', marginTop: '5px' }}>Incluido gratis</p>
+          <p style={{ fontSize: '10px', color: 'var(--t3)', letterSpacing: '.08em', fontWeight: 700, marginBottom: '4px' }}>{t('download.step1Label')}</p>
+          <p style={{ fontSize: '12px', color: 'var(--t1)', lineHeight: 1.45 }}>{t('download.step1Body')}</p>
+          <p style={{ fontSize: '11px', color: 'var(--t3)', marginTop: '5px' }}>{t('download.step1Included')}</p>
         </div>
         <div style={{ paddingLeft: '12px', borderLeft: '2px solid var(--blue)' }}>
-          <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.08em', fontWeight: 700, marginBottom: '4px' }}>02 · EJECUTAR</p>
-          <p style={{ fontSize: '12px', color: 'var(--t1)', lineHeight: 1.45 }}>30/60/90 días, responsables, KPIs, riesgos y contingencias.</p>
-          <p style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '5px' }}>{ready ? 'Plan de acción' : 'Plan completo desde 4,99 €'}</p>
+          <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.08em', fontWeight: 700, marginBottom: '4px' }}>{t('download.step2Label')}</p>
+          <p style={{ fontSize: '12px', color: 'var(--t1)', lineHeight: 1.45 }}>{t('download.step2Body')}</p>
+          <p style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '5px' }}>{ready ? t('download.step2Ready') : t('download.step2NotReady')}</p>
         </div>
       </div>
 
       {ready && !hasCredits && (
         <div style={{ width: '100%', padding: '14px 16px', borderRadius: 'var(--r-md)', background: 'var(--bg3)', border: '1px solid var(--bd)' }}>
-          <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: '9px' }}>Vista previa del plan operativo</p>
+          <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700, marginBottom: '9px' }}>{t('download.previewKicker')}</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', color: 'var(--t2)', fontSize: '12px' }}>
-            <span>01 · Prioridades de 30 días</span>
-            <span>02 · Responsables y esfuerzo</span>
-            <span>03 · KPIs y contingencias</span>
+            <span>{t('download.previewItem1')}</span>
+            <span>{t('download.previewItem2')}</span>
+            <span>{t('download.previewItem3')}</span>
           </div>
-          <p style={{ fontSize: '11px', color: 'var(--t3)', marginTop: '9px' }}>Desbloquéalo para convertir el veredicto en una hoja de ruta descargable.</p>
+          <p style={{ fontSize: '11px', color: 'var(--t3)', marginTop: '9px' }}>{t('download.previewFooter')}</p>
         </div>
       )}
 
       {hasCredits && (
         <p style={{ width: '100%', fontSize: '11px', color: 'var(--blue)', marginTop: '-12px' }}>
-          {credits} plan{credits !== 1 ? 'es' : ''} disponible{credits !== 1 ? 's' : ''}
+          {t('download.creditsAvailable').replace('{n}', credits).replace('{plural}', credits !== 1 ? 's' : '').replace('{plural2}', credits !== 1 ? 'es' : '')}
         </p>
       )}
 
@@ -74,7 +74,7 @@ export default function DownloadBanner({ ready = true, loading, credits, onGener
             whiteSpace: 'nowrap', flexShrink: 0,
           }}
         >
-          {loading ? 'Generando...' : '📄 Generar mi plan de acción'}
+          {loading ? t('download.generating') : t('download.generateCta')}
         </button>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end', flexShrink: 0 }}>
@@ -93,8 +93,8 @@ export default function DownloadBanner({ ready = true, loading, credits, onGener
               whiteSpace: 'nowrap',
             }}
           >
-            <span>3 planes de acción</span>
-            <span style={{ fontWeight: 400, opacity: .8 }}>9,99 €</span>
+            <span>{t('download.bundleLabel')}</span>
+            <span style={{ fontWeight: 400, opacity: .8 }}>{t('download.bundlePrice')}</span>
           </button>
 
           <button
@@ -113,12 +113,12 @@ export default function DownloadBanner({ ready = true, loading, credits, onGener
               whiteSpace: 'nowrap',
             }}
           >
-            <span>Crear mi plan de acción</span>
-            <span style={{ opacity: .7 }}>4,99 €</span>
+            <span>{t('download.singleLabel')}</span>
+            <span style={{ opacity: .7 }}>{t('download.singlePrice')}</span>
           </button>
 
           <p style={{ fontSize: '10px', color: 'var(--t3)', textAlign: 'right' }}>
-            Pago único · sin suscripción · desbloqueo inmediato
+            {t('download.oneTimeNote')}
           </p>
         </div>
       ))}

@@ -1,7 +1,9 @@
 import React, { useState } from 'react'
 import { PROVIDER_LIST, PROVIDERS } from '../lib/providers.js'
+import { useI18n } from '../lib/i18n.js'
 
 export default function SettingsModal({ onClose, onSave, currentProvider, currentKey }) {
+  const { t } = useI18n()
   const [provider, setProvider] = useState(currentProvider || 'claude')
   const [keys, setKeys] = useState({ claude: '', openai: '', gemini: '', [currentProvider || 'claude']: currentKey || '' })
   const [visible, setVisible] = useState(false)
@@ -17,23 +19,23 @@ export default function SettingsModal({ onClose, onSave, currentProvider, curren
     <div style={{ position:'fixed',inset:0,background:'rgba(6,13,31,0.85)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:300,padding:'20px',animation:'fadeIn .2s ease' }}
       onClick={e => e.target===e.currentTarget&&onClose()}>
       <div style={{ background:'var(--bg1)',border:'1px solid var(--blue-bd)',borderRadius:'var(--r-xl)',padding:'32px',width:'100%',maxWidth:'440px',animation:'fadeUp .3s ease' }}>
-        <h2 style={{ fontSize:'18px',fontWeight:700,marginBottom:'6px',color:'var(--t1)' }}>⚙️ Acceso</h2>
-        <p style={{ fontSize:'13px',color:'var(--t2)',marginBottom:'24px',lineHeight:1.5 }}>Elige cómo conectarte a la junta.</p>
+        <h2 style={{ fontSize:'18px',fontWeight:700,marginBottom:'6px',color:'var(--t1)' }}>{t('settings.title')}</h2>
+        <p style={{ fontSize:'13px',color:'var(--t2)',marginBottom:'24px',lineHeight:1.5 }}>{t('settings.subtitle')}</p>
 
         <div style={{ padding:'16px',borderRadius:'var(--r-md)',border:`1px solid ${isFreeMode?'var(--blue-bd)':'var(--bd)'}`,background:isFreeMode?'var(--blue-dim)':'transparent',marginBottom:'10px' }}>
           <div style={{ display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px' }}>
             <span>🌐</span>
-            <span style={{ fontSize:'14px',fontWeight:600,color:isFreeMode?'var(--blue)':'var(--t1)' }}>Modo gratuito</span>
-            {isFreeMode&&<span style={{ fontSize:'10px',padding:'2px 7px',borderRadius:'4px',background:'var(--blue-dim)',color:'var(--blue)',fontWeight:700,border:'1px solid var(--blue-bd)' }}>ACTIVO</span>}
+            <span style={{ fontSize:'14px',fontWeight:600,color:isFreeMode?'var(--blue)':'var(--t1)' }}>{t('settings.freeModeTitle')}</span>
+            {isFreeMode&&<span style={{ fontSize:'10px',padding:'2px 7px',borderRadius:'4px',background:'var(--blue-dim)',color:'var(--blue)',fontWeight:700,border:'1px solid var(--blue-bd)' }}>{t('settings.active')}</span>}
           </div>
-          <p style={{ fontSize:'12px',color:'var(--t3)',lineHeight:1.5 }}>2 análisis/día. Sin registro. El servidor usa GPT-4o mini cuando está disponible y Claude como respaldo.</p>
+          <p style={{ fontSize:'12px',color:'var(--t3)',lineHeight:1.5 }}>{t('settings.freeModeDesc')}</p>
         </div>
 
         <div style={{ padding:'16px',borderRadius:'var(--r-md)',border:`1px solid ${!isFreeMode?'var(--blue-bd)':'var(--bd)'}`,background:!isFreeMode?'var(--blue-dim)':'transparent',marginBottom:'24px' }}>
           <div style={{ display:'flex',alignItems:'center',gap:'8px',marginBottom:'12px' }}>
             <span>🔑</span>
-            <span style={{ fontSize:'14px',fontWeight:600,color:!isFreeMode?'var(--blue)':'var(--t1)' }}>Tu API key · ilimitado</span>
-            {!isFreeMode&&<span style={{ fontSize:'10px',padding:'2px 7px',borderRadius:'4px',background:'var(--blue-dim)',color:'var(--blue)',fontWeight:700,border:'1px solid var(--blue-bd)' }}>ACTIVO</span>}
+            <span style={{ fontSize:'14px',fontWeight:600,color:!isFreeMode?'var(--blue)':'var(--t1)' }}>{t('settings.apiKeyTitle')}</span>
+            {!isFreeMode&&<span style={{ fontSize:'10px',padding:'2px 7px',borderRadius:'4px',background:'var(--blue-dim)',color:'var(--blue)',fontWeight:700,border:'1px solid var(--blue-bd)' }}>{t('settings.active')}</span>}
           </div>
 
           {/* Selector de proveedor */}
@@ -63,16 +65,16 @@ export default function SettingsModal({ onClose, onSave, currentProvider, curren
             </button>
           </div>
           <p style={{ fontSize:'11px',color:'var(--t3)',marginTop:'6px' }}>
-            Consigue tu key en{' '}
+            {t('settings.getKeyAt')}{' '}
             <a href={p.keyUrl} target="_blank" rel="noreferrer" style={{ color:'var(--blue)',textDecoration:'none' }}>{p.keyUrlLabel}</a>
           </p>
         </div>
 
         <div style={{ display:'flex',gap:'8px' }}>
-          <button onClick={onClose} style={{ flex:1,padding:'11px',borderRadius:'var(--r-sm)',border:'1px solid var(--bd)',color:'var(--t2)',fontSize:'13px' }}>Cancelar</button>
-          {!isFreeMode&&<button onClick={()=>{onSave('claude','');onClose()}} style={{ padding:'11px 14px',borderRadius:'var(--r-sm)',border:'1px solid var(--red-bd)',color:'var(--red)',fontSize:'13px' }}>Quitar</button>}
+          <button onClick={onClose} style={{ flex:1,padding:'11px',borderRadius:'var(--r-sm)',border:'1px solid var(--bd)',color:'var(--t2)',fontSize:'13px' }}>{t('settings.cancel')}</button>
+          {!isFreeMode&&<button onClick={()=>{onSave('claude','');onClose()}} style={{ padding:'11px 14px',borderRadius:'var(--r-sm)',border:'1px solid var(--red-bd)',color:'var(--red)',fontSize:'13px' }}>{t('settings.remove')}</button>}
           <button onClick={()=>{onSave(provider, key.trim());onClose()}} style={{ flex:2,padding:'11px',borderRadius:'var(--r-sm)',border:'none',background:'var(--blue)',color:'var(--bg0)',fontSize:'13px',fontWeight:700 }}>
-            {hasKey?`${p.emoji} Usar mi key de ${p.label}`:'🌐 Modo gratuito'}
+            {hasKey?`${p.emoji} ${t('settings.useKey').replace('{label}', p.label)}`:t('settings.useFreeMode')}
           </button>
         </div>
       </div>

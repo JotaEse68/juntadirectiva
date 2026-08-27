@@ -98,8 +98,21 @@ export default function App() {
   )
 }
 
+// Los mensajes de error del servidor (analysis-gate.js, coach.js) vienen en español fijo —
+// cuando traen un `code` conocido se traducen aquí; el texto crudo del servidor solo se usa
+// como último recurso para códigos de error que no forman parte del flujo de pago habitual.
+const ERROR_CODE_KEYS = {
+  NO_FREE_ANALYSES: 'gate.noFreeToday',
+  NO_REPORT_CREDITS: 'gate.noReportCredits',
+  PAYMENT_REQUIRED: 'gate.paymentRequired',
+}
+
 function AppInner() {
   const { lang, setLang, t } = useI18n()
+  const localizeApiError = (data, fallbackKey) => {
+    const codeKey = ERROR_CODE_KEYS[data?.code]
+    return codeKey ? t(codeKey) : (data?.error || t(fallbackKey))
+  }
   const [situation, setSituation]   = useState('')
   const [profile, setProfile] = useState({ structure: null, budget: null, hours: null })
   const [meetingType, setMeetingType] = useState('decision')
@@ -180,7 +193,7 @@ function AppInner() {
           body: JSON.stringify({ sessionId }),
         })
         const data = await res.json()
-        if (!data.paid) { setCheckoutError('El pago no se completó.'); return }
+        if (!data.paid) { setCheckoutError(t('checkout.notCompleted')); return }
 
         if (data.product === 'extra') {
           const grantRes = await fetch('/api/analysis-gate', {
@@ -205,30 +218,53 @@ function AppInner() {
             } catch {}
             sessionStorage.removeItem(PENDING_SITUATION_KEY)
           } else {
-            setCheckoutError('El pago se confirmó pero no se pudo activar. Contacta soporte.')
+            setCheckoutError(t('checkout.confirmedNotActivated'))
           }
         } else {
-          localStorage.setItem(PREMIUM_ACCESS_KEY, 'true')
-          setPremiumAccess(true)
-          addReportCredits(data.product === 'bundle' ? 3 : 1)
+          // El crédito y el acceso premium se acreditan server-side (KV), verificados contra
+          // Stripe — no basta con que /api/verify-checkout diga "paid" para dárselos por
+          // buenos aquí: eso es justo lo que dejaba generar el informe gratis con solo tocar
+          // localStorage. grant-report es quien realmente los concede.
+          const grantRes = await fetch('/api/analysis-gate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'grant-report', sessionId }),
+          })
+          const grant = await grantRes.json()
+
+          if (grant.granted) {
+            localStorage.setItem(PREMIUM_ACCESS_KEY, 'true')
+            setPremiumAccess(true)
+            localStorage.setItem(CREDITS_KEY, String(grant.credits))
+            setReportCredits(grant.credits)
+            setGateError(null)
+          } else if (!grant.alreadyGranted) {
+            setCheckoutError(t('checkout.confirmedNotActivated'))
+            return
+          }
+          // alreadyGranted (replay de una sesión ya canjeada): el usuario ya tiene su
+          // crédito y acceso de una carga anterior de esta misma pantalla, no hace falta
+          // repetir el aviso ni bloquearle.
+
           // Si esta compra viene del CTA de "informe completo" dentro de un debate ya
-          // terminado, retoma ese contexto y gasta el crédito recién añadido de inmediato
-          // sobre el análisis para el que se compró, en vez de dejar al usuario en la
-          // pantalla inicial con un crédito sin usar.
+          // terminado, retoma ese contexto y genera el informe de inmediato sobre el
+          // análisis para el que se compró, en vez de dejar al usuario en la pantalla
+          // inicial con el crédito sin usar. El gasto real del crédito lo hace el propio
+          // generateReport contra el servidor, no este efecto.
           try {
             const raw = sessionStorage.getItem(PENDING_REPORT_KEY)
             if (raw) {
               const parsed = JSON.parse(raw)
               if (parsed.situation != null) setSituation(parsed.situation)
-              addReportCredits(-1)
+              addReportCredits(-1) // solo refleja en pantalla el crédito que generateReport va a consumir de inmediato en el servidor
               setShowReport(true)
-              generateReport({ ...parsed, apiKey: null, provider: 'claude', tier: 'paid' })
+              generateReport({ ...parsed, apiKey: null, provider: 'claude', tier: 'paid', lang })
             }
           } catch {}
           sessionStorage.removeItem(PENDING_REPORT_KEY)
         }
       } catch {
-        setCheckoutError('No se pudo verificar el pago.')
+        setCheckoutError(t('checkout.couldNotVerify'))
       } finally {
         clearUrl()
       }
@@ -241,7 +277,7 @@ function AppInner() {
     if (reportCredits <= 0) return
     addReportCredits(-1)
     setShowReport(true)
-    generateReport({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey: apiKey || null, provider: apiProvider })
+    generateReport({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey: apiKey || null, provider: apiProvider, lang })
   }
 
   const handleBuyReport = async (product) => {
@@ -254,7 +290,7 @@ function AppInner() {
         body: JSON.stringify({ product }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error creando el pago')
+      if (!res.ok) throw new Error(data.error || t('checkout.createFailed'))
       // El redirect a Stripe es una navegación completa: se pierde todo el estado de React.
       // Si ya hay un debate terminado, se guarda para poder retomarlo y gastar el crédito
       // recién comprado sobre él en cuanto se vuelva (ver el efecto de checkout_session_id).
@@ -307,7 +343,7 @@ function AppInner() {
         const data = await res.json()
         setGateChecking(false)
         if (!res.ok || !data.allowed) {
-          setGateError(data.error || 'Sin análisis gratis hoy.')
+          setGateError(localizeApiError(data, 'gate.noFreeToday'))
           return
         }
       } catch {
@@ -332,7 +368,7 @@ function AppInner() {
         body: JSON.stringify({ product: 'extra' }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error creando el pago')
+      if (!res.ok) throw new Error(data.error || t('checkout.createFailed'))
       // Igual que en handleBuyReport: se pierde el estado de React en el redirect. Aquí no
       // hay debate que retomar, pero al menos se evita que el usuario tenga que reescribir
       // lo que ya había tecleado.
