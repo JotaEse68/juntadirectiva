@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { streamCompletion } from '../lib/aiClient.js'
+import { useI18n } from '../lib/i18n.js'
 
 export const FREE_CHAT_LIMIT = 10
 
@@ -24,6 +25,7 @@ Mantén la misma disciplina que el resto de la junta: nunca inventes cifras del 
 }
 
 export function useChairmanChat() {
+  const { lang, t } = useI18n()
   const [messages, setMessages] = useState([]) // { role: 'user'|'assistant', content }
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
@@ -40,12 +42,13 @@ export function useChairmanChat() {
       const system = buildChairmanSystem(sessionContext)
       const history = messages.map(m => `${m.role === 'user' ? 'Usuario' : 'Roberto'}: ${m.content}`).join('\n\n')
       const attachmentContext = attachments.filter(a => a.kind === 'text').map(a => `\n\nADJUNTO: ${a.name}\n${a.text}`).join('')
+      const languageLine = lang === 'en' ? '\n\nAnswer in English — natural, warm and direct, not a literal translation.' : ''
       const userMsg = history
         ? `${history}\n\nUsuario: ${question}\n\nResponde como Roberto.`
         : `Usuario: ${question}\n\nResponde como Roberto.`
 
       const reply = await streamCompletion({
-        provider, apiKey, system, userMsg: userMsg + attachmentContext, maxTokens: 700, attachments,
+        provider, apiKey, system, userMsg: userMsg + attachmentContext + languageLine, maxTokens: 700, attachments,
         onChunk: (partial) => {
           setMessages(prev => {
             const next = prev.slice()
@@ -60,12 +63,12 @@ export function useChairmanChat() {
         return next
       })
     } catch (err) {
-      setError(err.message || 'No se pudo enviar el mensaje')
+      setError(err.message || t('chairman.sendFailed'))
       setMessages(prev => prev.slice(0, -2)) // quita el par user+placeholder fallido
     } finally {
       setSending(false)
     }
-  }, [messages])
+  }, [messages, lang, t])
 
   const reset = useCallback(() => { setMessages([]); setError(null) }, [])
 

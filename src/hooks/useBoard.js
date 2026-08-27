@@ -1,6 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { MEETING_TYPES, MEETING_FRAMING } from '../lib/directors.js'
 import { streamCompletion } from '../lib/aiClient.js'
+import { useI18n } from '../lib/i18n.js'
+
+// Los prompts de directores/Chairman se quedan en español (así están afinados) — para que
+// respondan en inglés cuando la UI está en inglés basta con pedirlo explícitamente al final
+// del mensaje, igual que ya funciona para el informe de pago (ver useReport.js).
+function languageDirective(lang) {
+  return lang === 'en' ? '\n\nAnswer in English — natural, warm and direct, not a literal translation.' : ''
+}
 
 const HISTORY_KEY = 'junta-paid-last-session'
 const HISTORY_TTL = 24 * 60 * 60 * 1000
@@ -25,7 +33,7 @@ function buildDebateRecap(debateSoFar) {
   return `\n\nDEBATE HASTA AHORA (tus colegas ya hablaron, en este orden):\n${turns}\n\nAntes de dar tu propio análisis, reacciona en 1-2 frases a lo que han dicho tus colegas — cita a quien corresponda por nombre, coincide o discrepa explícitamente. Luego da tu aportación completa desde tu especialidad.`
 }
 
-async function callDirector({ director, situation, meetingType, contextBlock, debateSoFar, apiKey, provider, onChunk }) {
+async function callDirector({ director, situation, meetingType, contextBlock, debateSoFar, apiKey, provider, onChunk, lang }) {
   const meetingLabel = MEETING_TYPES.find(m => m.id === meetingType)?.label || 'Reunión'
   const framing = MEETING_FRAMING[meetingType] || ''
 
@@ -37,22 +45,22 @@ ${framing}
 SITUACIÓN:
 ${situation}${contextSection}${debateSection}
 
-Como ${director.name} (${director.title}), da tu análisis experto y posición. Si el contexto adicional es relevante para tu especialidad, incorpóralo en tu análisis. Nunca te niegues a opinar alegando que no puedes acceder a una URL o navegar por internet — todo el contexto relevante ya está resuelto y resumido arriba; si algo no está cubierto ahí, trabaja igual con lo que sí tienes.`
+Como ${director.name} (${director.title}), da tu análisis experto y posición. Si el contexto adicional es relevante para tu especialidad, incorpóralo en tu análisis. Nunca te niegues a opinar alegando que no puedes acceder a una URL o navegar por internet — todo el contexto relevante ya está resuelto y resumido arriba; si algo no está cubierto ahí, trabaja igual con lo que sí tienes.${languageDirective(lang)}`
 
   return streamCompletion({ provider, apiKey, system: director.systemPrompt, userMsg, maxTokens: 800, onChunk })
 }
 
 // Llama al Chairman para el veredicto final basado en todos los análisis
-async function callContrast({ situation, responses, apiKey, provider }) {
+async function callContrast({ situation, responses, apiKey, provider, lang }) {
   const summaries = responses.map(r => `${r.director.name}: ${excerpt(r.text, 500)}`).join('\n\n')
   return streamCompletion({
     provider, apiKey, maxTokens: 350,
     system: 'Eres el moderador de una junta directiva que asesora a un autoempleado o microempresa sin departamentos ni presupuesto de cinco cifras. Contrasta las perspectivas recibidas: identifica dos acuerdos, una tensión real y qué evidencia decidiría entre alternativas. Sé concreto y no inventes datos del negocio del usuario.',
-    userMsg: `SITUACIÓN:\n${situation}\n\nPERSPECTIVAS INICIALES:\n${summaries}`,
+    userMsg: `SITUACIÓN:\n${situation}\n\nPERSPECTIVAS INICIALES:\n${summaries}${languageDirective(lang)}`,
   })
 }
 
-async function callVerdict({ situation, meetingType, contextBlock, responses, contrast = '', apiKey, provider }) {
+async function callVerdict({ situation, meetingType, contextBlock, responses, contrast = '', apiKey, provider, lang }) {
   const summaries = responses
     .map(r => `${r.director.name} (${r.director.title}):\n${r.text}`)
     .join('\n\n---\n\n')
@@ -78,12 +86,13 @@ ${summaries}
 
 ${contrast ? `RONDA DE CONTRASTE:\n${contrast}\n` : ''}
 
-Sintetiza el debate y emite el veredicto final de la junta.`
+Sintetiza el debate y emite el veredicto final de la junta.${languageDirective(lang)}`
 
   return streamCompletion({ provider, apiKey, system: verdictSystem, userMsg: verdictMsg, maxTokens: 600 })
 }
 
 export function useBoard() {
+  const { lang, t } = useI18n()
   const savedRef = useRef(loadHistory())
   // Estado por director: { id, status: 'pending'|'streaming'|'done'|'error', text, error }
   const [directorStates, setDirectorStates] = useState(() => savedRef.current?.directorStates || {})
@@ -160,6 +169,7 @@ export function useBoard() {
           debateSoFar,
           apiKey: apiKey || null,
           provider: provider || 'claude',
+          lang,
           onChunk: (partial) => {
             setDirectorStates(prev => ({
               ...prev,
@@ -170,8 +180,13 @@ export function useBoard() {
         setDirectorStates(prev => ({ ...prev, [director.id]: { status: 'done', text } }))
         debateSoFar.push({ director, text })
       } catch (err) {
-        // Rate limit en modo proxy
-        if (err.message.includes('429') || err.message.toLowerCase().includes('límite')) {
+        // Rate limit en modo proxy — el servidor manda el texto en español fijo, así que si
+        // trae el code RATE_LIMITED (ver aiClient.js) se reconstruye el mensaje traducido en
+        // vez de mostrar el texto crudo del servidor.
+        if (err.code === 'RATE_LIMITED') {
+          const min = err.resetAt ? Math.max(1, Math.ceil((err.resetAt - Date.now()) / 60000)) : '?'
+          setGlobalError(t('gate.rateLimited').replace('{min}', min))
+        } else if (err.message.includes('429') || err.message.toLowerCase().includes('límite')) {
           setGlobalError(err.message)
         }
         setDirectorStates(prev => ({ ...prev, [director.id]: { status: 'error', text: '', error: err.message } }))
@@ -192,7 +207,7 @@ export function useBoard() {
     const successful = debateSoFar
 
     if (successful.length === 0) {
-      setGlobalError('La junta no pudo conectar con el proveedor de IA. Comprueba la conexión o vuelve a intentarlo.')
+      setGlobalError(t('board.connectionError'))
       setPhase('idle')
       return
     }
@@ -200,7 +215,7 @@ export function useBoard() {
     let contrast = ''
     if (mode === 'fast' && successful.length > 1) {
       setPhase('contrasting')
-      try { contrast = await callContrast({ situation, responses: successful, apiKey: apiKey || null, provider: provider || 'claude' }) } catch { /* el Chairman puede sintetizar sin esta ronda */ }
+      try { contrast = await callContrast({ situation, responses: successful, apiKey: apiKey || null, provider: provider || 'claude', lang }) } catch { /* el Chairman puede sintetizar sin esta ronda */ }
     }
 
     // Veredicto del Chairman
@@ -215,15 +230,16 @@ export function useBoard() {
         contrast,
         apiKey: apiKey || null,
         provider: provider || 'claude',
+        lang,
       })
       setVerdict(verdictText)
     } catch (err) {
-      setVerdict('Error al generar el veredicto. Los análisis individuales están disponibles arriba.')
+      setVerdict(t('board.verdictError'))
     } finally {
       setVerdictLoading(false)
       setPhase('done')
     }
-  }, [waitIfPaused])
+  }, [waitIfPaused, lang, t])
 
   const reset = useCallback(() => {
     pausedRef.current = false

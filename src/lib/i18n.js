@@ -182,6 +182,9 @@ const DICT = {
     'gate.rateLimited': 'Free usage limit reached for this hour. Come back in {min} min or use your own API key for unlimited use.',
     'checkout.createFailed': 'Error creating the payment.',
     'report.generationFailed': 'The report could not be generated.',
+    'board.connectionError': "The board couldn't connect to the AI provider. Check your connection or try again.",
+    'board.verdictError': 'Error generating the verdict. The individual analyses are available above.',
+    'chairman.sendFailed': 'The message could not be sent.',
   },
   es: {
     'nav.freeAnalyses': '2 análisis/día',
@@ -360,6 +363,9 @@ const DICT = {
     'gate.rateLimited': 'Límite de uso gratuito alcanzado por esta hora. Vuelve en {min} min o usa tu propia API key para uso ilimitado.',
     'checkout.createFailed': 'Error creando el pago.',
     'report.generationFailed': 'No se pudo generar el informe.',
+    'board.connectionError': 'La junta no pudo conectar con el proveedor de IA. Comprueba la conexión o vuelve a intentarlo.',
+    'board.verdictError': 'Error al generar el veredicto. Los análisis individuales están disponibles arriba.',
+    'chairman.sendFailed': 'No se pudo enviar el mensaje.',
   },
 }
 

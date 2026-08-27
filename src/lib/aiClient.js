@@ -51,7 +51,12 @@ export async function streamCompletion({ provider, apiKey, system, userMsg, maxT
   const res = await fetch(req.endpoint, { method: 'POST', headers: req.headers, body: req.body })
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
-    throw new Error(data.error || `Error ${res.status}`)
+    // code/resetAt viajan en el propio error para que quien llama pueda traducir el mensaje
+    // al idioma de la UI en vez de mostrar el texto en español que devuelve el servidor.
+    const err = new Error(data.error || `Error ${res.status}`)
+    err.code = data.code
+    err.resetAt = data.resetAt
+    throw err
   }
 
   const effectiveProvider = apiKey ? provider : (res.headers.get('X-AI-Provider') || 'openai')
