@@ -34,6 +34,21 @@ export function classifyVote(directorId, text) {
   return null
 }
 
+// Devuelve la línea original (sin clasificar) que contiene la convicción del director, para
+// mostrarla tal cual en DirectorModal.jsx ("Position in this session" / "Posición en esta
+// sesión"). Reutiliza el mismo CONVICCION_RE que classifyVote en vez de que App.jsx mantenga
+// su propia lista de palabras clave — las dos ya se desincronizaron una vez esta sesión
+// (classifyVote ganó soporte de inglés y App.jsx se quedó con una lista vieja que ya no
+// coincidía con nada en la práctica).
+export function findConvictionLine(text) {
+  if (!text) return null
+  const lines = text.split('\n').filter(l => l.trim())
+  for (const line of lines.slice(-5)) {
+    if (CONVICCION_RE.test(line.toLowerCase())) return line.trim()
+  }
+  return null
+}
+
 // directorStates: { [id]: { status, text } }
 export function computeConsensus(directorStates) {
   const counts = { favor: 0, contra: 0, mixto: 0, sinDato: 0 }

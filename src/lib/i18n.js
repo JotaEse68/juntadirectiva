@@ -245,15 +245,11 @@ const DICT = {
     'chairman.defaultAttachmentPrompt': 'Review the attached material and tell me how it changes the decision.',
 
     'report.title': '📄 Action plan',
-    'report.titleLocked': '📄 Verdict extension',
     'report.loadingText': "Consulting the directors who didn't debate live and expanding the analysis...",
-    'report.lockedDesc': "You already have the free summary, ideas, resources and board opinions. The full report adds your first 48-hour win, a 3-week plan, actions organized by priority with the reasoning behind each one, and a step-by-step confirmation checklist — all downloadable.",
-    'report.upgradeCta': 'Create my action plan · $4.99',
     'report.quickTakesHeader': 'Quick take from the other directors',
     'report.close': 'Close',
     'report.downloadPdf': '⬇️ Download executive PDF',
     'report.reopen': '📄 View report',
-    'report.reopenLocked': '📄 View free extension',
     'footer.siteInfo': 'Site information',
 
     'pdf.decision': 'THE DECISION',
@@ -520,15 +516,11 @@ const DICT = {
     'chairman.defaultAttachmentPrompt': 'Revisa el material adjunto y dime cómo cambia la decisión.',
 
     'report.title': '📄 Plan de acción',
-    'report.titleLocked': '📄 Ampliación del veredicto',
     'report.loadingText': 'Consultando a los directores que no debatieron en vivo y ampliando el análisis...',
-    'report.lockedDesc': 'Ya tienes gratis el resumen, las ideas, recursos y opiniones de la junta. El informe completo añade tu primera victoria en 48 horas, un plan de 3 semanas, las acciones organizadas por prioridad con el porqué de cada una, y una lista de confirmación paso a paso — todo descargable.',
-    'report.upgradeCta': 'Crear mi plan de acción · 4,99 €',
     'report.quickTakesHeader': 'Opinión exprés de los demás directores',
     'report.close': 'Cerrar',
     'report.downloadPdf': '⬇️ Descargar PDF ejecutivo',
     'report.reopen': '📄 Ver informe',
-    'report.reopenLocked': '📄 Ver ampliación gratuita',
     'footer.siteInfo': 'Información del sitio',
 
     'pdf.decision': 'LA DECISIÓN',

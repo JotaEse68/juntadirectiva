@@ -82,7 +82,7 @@ Sé específico, denso en valor y cero genérico. Nunca dejes una sección a med
 
 export function useReport() {
   const { t } = useI18n()
-  const [report, setReport] = useState(null)       // { text, quickTakes: [{director,text}], locked }
+  const [report, setReport] = useState(null)       // { text, quickTakes: [{director,text}] }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -145,7 +145,7 @@ Produce el informe siguiendo exactamente la estructura indicada.`
       // 5500 seguía cortando la despedida final a media frase en pruebas reales — 7500 le
       // da margen de sobra incluso en los casos más largos.
       const text = await streamCompletion({ provider, apiKey, system: buildReportSystem(lang), userMsg: reportPrompt, maxTokens: 7500, serverMode: 'premium' })
-      setReport({ text, quickTakes, locked: false })
+      setReport({ text, quickTakes })
     } catch (err) {
       setError(err.message || t('report.generationFailed'))
     } finally {

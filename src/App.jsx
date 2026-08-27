@@ -15,7 +15,7 @@ import { useReport } from './hooks/useReport.js'
 import { useChairmanChat } from './hooks/useChairmanChat.js'
 import ContextPanel from './components/ContextPanel.jsx'
 import { DIRECTORS, MEETING_TYPES, selectDirectorsForMeeting, orderForDebate } from './lib/directors.js'
-import { computeConsensus } from './lib/consensus.js'
+import { computeConsensus, findConvictionLine } from './lib/consensus.js'
 import { I18nProvider, useI18n } from './lib/i18n.js'
 
 const STORAGE_KEY = 'junta_api_key'
@@ -413,19 +413,9 @@ function AppInner() {
     window.history.replaceState({}, '', '/')
   }
 
-  // Extrae el voto de un director del texto generado — el texto puede llegar en español o en
-  // inglés según el idioma de la UI (ver languageSystemDirective en useBoard.js), así que las
-  // palabras clave cubren ambos.
-  const getDirectorVote = (dirId) => {
-    const state = directorStates[dirId]
-    if (!state?.text) return null
-    const lines = state.text.split('\n').filter(l => l.trim())
-    const keywords = ['convicción', 'voto:', 'posición:', 'evaluación:', 'veredicto:', 'conviction', 'vote:', 'position:', 'assessment:', 'verdict:']
-    for (const line of lines.slice(-5)) {
-      if (keywords.some(k => line.toLowerCase().includes(k))) return line.trim()
-    }
-    return null
-  }
+  // Extrae la línea de convicción de un director del texto generado, para mostrarla en su
+  // modal. Reutiliza el mismo matcher que consensus.js usa para clasificar el consenso.
+  const getDirectorVote = (dirId) => findConvictionLine(directorStates[dirId]?.text)
 
   if (showPrivateAccess) return <PrivateAccessModal onGranted={handlePrivateGranted} />
 
@@ -827,7 +817,7 @@ function AppInner() {
             cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
           }}
         >
-          {report.locked ? t('report.reopenLocked') : t('report.reopen')}
+          {t('report.reopen')}
         </button>
       )}
 
@@ -840,8 +830,6 @@ function AppInner() {
           loading={reportLoading}
           error={reportError}
           onClose={() => setShowReport(false)}
-          onUpgrade={() => handleBuyReport('single')}
-          upgrading={buyingReport}
         />
       )}
       {privateAccess && showSettings && <SettingsModal currentProvider={apiProvider} currentKey={apiKey} onSave={handleSaveKey} onClose={() => setShowSettings(false)} />}

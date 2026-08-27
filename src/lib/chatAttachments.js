@@ -1,3 +1,5 @@
+import { extractPdfText } from './pdfExtract.js'
+
 const MAX_BYTES = 8 * 1024 * 1024
 const MAX_TEXT = 8000
 
@@ -8,19 +10,9 @@ function base64(buffer) {
 }
 
 async function readPdf(file) {
-  const [pdfjsLib, worker] = await Promise.all([
-    import('pdfjs-dist'),
-    import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
-  ])
-  pdfjsLib.GlobalWorkerOptions.workerSrc = worker.default
-  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise
-  let text = ''
-  for (let page = 1; page <= Math.min(pdf.numPages, 20); page++) {
-    const content = await (await pdf.getPage(page)).getTextContent()
-    text += content.items.map(item => item.str).join(' ') + '\n'
-  }
+  const text = await extractPdfText(file, { maxChars: MAX_TEXT })
   if (!text.trim()) throw new Error('No se pudo extraer texto del PDF')
-  return text.slice(0, MAX_TEXT)
+  return text
 }
 
 export async function prepareChatAttachment(file) {

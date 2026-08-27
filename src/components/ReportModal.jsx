@@ -108,7 +108,7 @@ function renderRichText(rawText) {
   return parts
 }
 
-export default function ReportModal({ situation, verdict, report, loading, error, onClose, onUpgrade, upgrading }) {
+export default function ReportModal({ situation, verdict, report, loading, error, onClose }) {
   const { t, lang } = useI18n()
   const handleDownload = () => {
     downloadExecutiveReportPdf({ situation, verdict, report, lang })
@@ -124,7 +124,7 @@ export default function ReportModal({ situation, verdict, report, loading, error
           <div>
             <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '2px', fontWeight: 500 }}>Junta Directiva AI</p>
             <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--t1)' }}>
-              {report?.locked ? t('report.titleLocked') : t('report.title')}
+              {t('report.title')}
             </p>
           </div>
           <button onClick={onClose} style={{ fontSize: '18px', color: 'var(--t3)', padding: '4px 8px' }}>×</button>
@@ -181,24 +181,6 @@ export default function ReportModal({ situation, verdict, report, loading, error
                 )
               })}
 
-              {report.locked && (
-                <div style={{ marginBottom: '22px', padding: '18px', borderRadius: 'var(--r-md)', border: '1px dashed var(--blue-bd)', background: 'var(--blue-dim)' }}>
-                  <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: '8px' }}>
-                    🔒 Plan de mejora paso a paso
-                  </p>
-                  <p style={{ fontSize: '13px', color: 'var(--t2)', lineHeight: 1.6, marginBottom: '12px' }}>
-                    {t('report.lockedDesc')}
-                  </p>
-                  <button
-                    onClick={onUpgrade}
-                    disabled={upgrading}
-                    style={{ padding: '10px 18px', borderRadius: 'var(--r-sm)', border: 'none', background: upgrading ? 'var(--bg3)' : 'var(--blue)', color: upgrading ? 'var(--t2)' : 'var(--bg0)', fontSize: '13px', fontWeight: 700, cursor: upgrading ? 'not-allowed' : 'pointer' }}
-                  >
-                    {upgrading ? t('dailyLimit.processing') : t('report.upgradeCta')}
-                  </button>
-                </div>
-              )}
-
               {report.quickTakes?.length > 0 && (
                 <div style={{ marginTop: '28px', paddingTop: '20px', borderTop: '1px solid var(--bd)' }}>
                   <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: '14px' }}>
@@ -224,11 +206,9 @@ export default function ReportModal({ situation, verdict, report, loading, error
         {report && !loading && (
           <div style={{ padding: '16px 28px', borderTop: '1px solid var(--bd)', display: 'flex', gap: '8px' }}>
             <button onClick={onClose} style={{ flex: 1, padding: '11px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t2)', fontSize: '13px' }}>{t('report.close')}</button>
-            {!report.locked && (
-              <button onClick={handleDownload} style={{ flex: 2, padding: '11px', borderRadius: 'var(--r-sm)', border: 'none', background: 'var(--blue)', color: 'var(--bg0)', fontSize: '13px', fontWeight: 700 }}>
-                {t('report.downloadPdf')}
-              </button>
-            )}
+            <button onClick={handleDownload} style={{ flex: 2, padding: '11px', borderRadius: 'var(--r-sm)', border: 'none', background: 'var(--blue)', color: 'var(--bg0)', fontSize: '13px', fontWeight: 700 }}>
+              {t('report.downloadPdf')}
+            </button>
           </div>
         )}
       </div>

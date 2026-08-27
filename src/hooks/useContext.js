@@ -1,23 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useI18n } from '../lib/i18n.js'
-
-// Extrae texto de PDF usando pdf.js desde CDN
-async function extractPDF(file) {
-  const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs')
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs'
-
-  const arrayBuffer = await file.arrayBuffer()
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-  let fullText = ''
-
-  for (let i = 1; i <= Math.min(pdf.numPages, 20); i++) {
-    const page = await pdf.getPage(i)
-    const content = await page.getTextContent()
-    const pageText = content.items.map(item => item.str).join(' ')
-    fullText += pageText + '\n'
-  }
-  return fullText.slice(0, 8000)
-}
+import { extractPdfText } from '../lib/pdfExtract.js'
 
 // Extrae texto de Word (.docx) usando mammoth desde CDN
 async function extractDOCX(file) {
@@ -99,7 +82,7 @@ export function useContextBuilder() {
       // 1. Extraer texto en el cliente
       let extracted = ''
       if (ext === 'pdf') {
-        extracted = await extractPDF(file)
+        extracted = await extractPdfText(file)
       } else if (ext === 'md') {
         extracted = await extractMD(file)
       } else {

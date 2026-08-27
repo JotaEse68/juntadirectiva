@@ -108,7 +108,6 @@ export function useBoard() {
   const [verdictLoading, setVerdictLoading] = useState(false)
   const [phase, setPhase] = useState(() => savedRef.current?.verdict ? 'done' : 'idle') // idle | convening | debating | contrasting | verdict | done
   const [activeDirectors, setActiveDirectors] = useState(() => savedRef.current?.activeDirectors || [])
-  const [rateLimitInfo, setRateLimitInfo] = useState(null)
   const [globalError, setGlobalError] = useState(null)
   const [isPaused, setIsPaused] = useState(false)
 
@@ -276,6 +275,6 @@ export function useBoard() {
   return {
     conveneBoard, reset, retry, clearHistory, restoredSession: savedRef.current?.request || null, pause, resume,
     directorStates, verdict, verdictLoading,
-    phase, activeDirectors, rateLimitInfo, globalError, isPaused,
+    phase, activeDirectors, globalError, isPaused,
   }
 }
