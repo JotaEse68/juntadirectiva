@@ -61,9 +61,12 @@ function parseSections(text) {
   return sections
 }
 
-// Convierte [texto](url) y URLs sueltas en enlaces clicables reales; el resto del texto
-// se deja tal cual. Se usa tanto en las secciones del informe como en las opiniones exprés.
-function renderRichText(text) {
+// Limpia negrita/cursiva markdown (**doble** y *simple*, este último se cuela sobre todo en
+// las opiniones exprés de los directores, que nunca pasan por parseSections) y convierte
+// [texto](url) y URLs sueltas en enlaces clicables reales. Se usa tanto en las secciones del
+// informe como en las opiniones exprés.
+function renderRichText(rawText) {
+  const text = rawText.replace(/\*\*/g, '').replace(/\*/g, '')
   const re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)]+)/g
   const parts = []
   let last = 0
@@ -140,10 +143,13 @@ export default function ReportModal({ situation, verdict, report, loading, error
                         return <hr key={j} style={{ border: 'none', borderTop: '1px solid var(--bd)', margin: '16px 0' }} />
                       }
                       const showCheckbox = isChecklist && !pastDivider
+                      // El modelo a veces ya escribe su propia sintaxis "- [ ] " de checklist —
+                      // se quita para no duplicar la casilla junto con la que dibuja esta vista.
+                      const lineText = showCheckbox ? l.text.replace(/^-?\s*\[[ xX]?\]\s*/, '').replace(/^-\s+/, '') : l.text
                       return (
                         <p key={j} style={{ fontSize: '13.5px', lineHeight: 1.75, color: 'var(--t1)', marginBottom: '10px', display: showCheckbox ? 'flex' : 'block', gap: showCheckbox ? '9px' : 0 }}>
                           {showCheckbox && <span style={{ flexShrink: 0, color: 'var(--blue)' }}>☐</span>}
-                          <span>{renderRichText(l.text)}</span>
+                          <span>{renderRichText(lineText)}</span>
                         </p>
                       )
                     })}

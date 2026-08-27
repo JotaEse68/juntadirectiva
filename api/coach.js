@@ -97,7 +97,7 @@ export default async function handler(req) {
   // completo sin pagar). El informe premium (REPORT_SYSTEM_PAID en useReport.js) pide 7
   // secciones estructuradas — con 1200 se cortaba a media frase justo después de ACCIONES
   // PRIORITARIAS, sin llegar a las últimas 3-4 secciones. 3000 le da margen real.
-  const maxTokens = Math.min(body.maxTokens || 800, mode === 'premium' ? 5500 : 1200)
+  const maxTokens = Math.min(body.maxTokens || 800, mode === 'premium' ? 7500 : 1200)
   if (!systemPrompt || !userPrompt) return new Response(JSON.stringify({ error: 'Faltan prompts' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (userPrompt.length > 12000 || systemPrompt.length > 8000) return new Response(JSON.stringify({ error: 'Prompt demasiado largo' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
 

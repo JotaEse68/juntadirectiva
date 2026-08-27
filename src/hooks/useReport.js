@@ -101,11 +101,11 @@ ${quickSummary || '(todos los directores participaron en vivo)'}
 
 Produce el informe siguiendo exactamente la estructura indicada.`
 
-      // La estructura ahora tiene 10 secciones (3 niveles de prioridad en vez de 1, más
-      // apertura y cierre en prosa) con explicaciones de "por qué" y "qué consigues" en
-      // cada acción — bastante más denso que la versión de 7 secciones que ya necesitaba
-      // 3600 para no cortarse. Con margen de sobra para que nunca quede a medias.
-      const text = await streamCompletion({ provider, apiKey, system: REPORT_SYSTEM_PAID, userMsg: reportPrompt, maxTokens: 5500, serverMode: 'premium' })
+      // La estructura tiene 10 secciones (3 niveles de prioridad en vez de 1, más apertura
+      // y cierre en prosa) con explicaciones de "por qué" y "qué consigues" en cada acción.
+      // 5500 seguía cortando la despedida final a media frase en pruebas reales — 7500 le
+      // da margen de sobra incluso en los casos más largos.
+      const text = await streamCompletion({ provider, apiKey, system: REPORT_SYSTEM_PAID, userMsg: reportPrompt, maxTokens: 7500, serverMode: 'premium' })
       setReport({ text, quickTakes, locked: false })
     } catch (err) {
       setError(err.message || 'No se pudo generar el informe')
