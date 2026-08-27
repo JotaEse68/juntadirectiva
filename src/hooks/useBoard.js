@@ -4,10 +4,18 @@ import { streamCompletion } from '../lib/aiClient.js'
 import { useI18n } from '../lib/i18n.js'
 
 // Los prompts de directores/Chairman se quedan en español (así están afinados) — para que
-// respondan en inglés cuando la UI está en inglés basta con pedirlo explícitamente al final
-// del mensaje, igual que ya funciona para el informe de pago (ver useReport.js).
+// respondan en inglés cuando la UI está en inglés hace falta algo más fuerte que una línea al
+// final del mensaje de usuario: los system prompts de los directores están cargados de
+// instrucciones y convenciones en español (p.ej. "Termina con tu convicción: convicción
+// alta/..."), y el modelo las prioriza sobre una nota suelta al final del user message —
+// se probó en vivo y el debate seguía saliendo en español. Va como PRIMERA línea del
+// system prompt (más peso que en medio o al final) y se repite al final del user message
+// como refuerzo.
+function languageSystemDirective(lang) {
+  return lang === 'en' ? 'IMPORTANT: Write your entire reply in English — natural, warm and direct, not a literal translation. This applies to every line, including any closing conviction statement.\n\n' : ''
+}
 function languageDirective(lang) {
-  return lang === 'en' ? '\n\nAnswer in English — natural, warm and direct, not a literal translation.' : ''
+  return lang === 'en' ? '\n\n(Reminder: answer in English.)' : ''
 }
 
 const HISTORY_KEY = 'junta-paid-last-session'
@@ -47,7 +55,7 @@ ${situation}${contextSection}${debateSection}
 
 Como ${director.name} (${director.title}), da tu análisis experto y posición. Si el contexto adicional es relevante para tu especialidad, incorpóralo en tu análisis. Nunca te niegues a opinar alegando que no puedes acceder a una URL o navegar por internet — todo el contexto relevante ya está resuelto y resumido arriba; si algo no está cubierto ahí, trabaja igual con lo que sí tienes.${languageDirective(lang)}`
 
-  return streamCompletion({ provider, apiKey, system: director.systemPrompt, userMsg, maxTokens: 800, onChunk })
+  return streamCompletion({ provider, apiKey, system: languageSystemDirective(lang) + director.systemPrompt, userMsg, maxTokens: 800, onChunk })
 }
 
 // Llama al Chairman para el veredicto final basado en todos los análisis
@@ -55,7 +63,7 @@ async function callContrast({ situation, responses, apiKey, provider, lang }) {
   const summaries = responses.map(r => `${r.director.name}: ${excerpt(r.text, 500)}`).join('\n\n')
   return streamCompletion({
     provider, apiKey, maxTokens: 350,
-    system: 'Eres el moderador de una junta directiva que asesora a un autoempleado o microempresa sin departamentos ni presupuesto de cinco cifras. Contrasta las perspectivas recibidas: identifica dos acuerdos, una tensión real y qué evidencia decidiría entre alternativas. Sé concreto y no inventes datos del negocio del usuario.',
+    system: languageSystemDirective(lang) + 'Eres el moderador de una junta directiva que asesora a un autoempleado o microempresa sin departamentos ni presupuesto de cinco cifras. Contrasta las perspectivas recibidas: identifica dos acuerdos, una tensión real y qué evidencia decidiría entre alternativas. Sé concreto y no inventes datos del negocio del usuario.',
     userMsg: `SITUACIÓN:\n${situation}\n\nPERSPECTIVAS INICIALES:\n${summaries}${languageDirective(lang)}`,
   })
 }
@@ -65,7 +73,7 @@ async function callVerdict({ situation, meetingType, contextBlock, responses, co
     .map(r => `${r.director.name} (${r.director.title}):\n${r.text}`)
     .join('\n\n---\n\n')
 
-  const verdictSystem = `Eres Roberto Alcántara, Chairman de esta junta directiva. Tras escuchar a todos los directores, tu rol es sintetizar el debate en una recomendación clara y accionable — no en una sentencia.
+  const verdictSystem = `${languageSystemDirective(lang)}Eres Roberto Alcántara, Chairman de esta junta directiva. Tras escuchar a todos los directores, tu rol es sintetizar el debate en una recomendación clara y accionable — no en una sentencia.
 Recuerda quién te consulta: un autoempleado o microempresa de 1-3 personas, sin departamentos ni presupuesto de cinco cifras — es el CEO, el vendedor y el técnico a la vez. El camino a seguir debe ser algo ejecutable por él solo: una herramienta, una automatización o IA existente, o delegar puntualmente una tarea concreta a un freelancer barato (Fiverr/Upwork) si hace falta — nunca "monta un equipo", ni cifras de negocio que nadie te ha dado. Nada de jerga corporativa: tradúcelo a lenguaje de calle.
 Tu síntesis debe:
 1. Identificar los 2-3 puntos de consenso más importantes entre los directores

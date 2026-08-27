@@ -4,12 +4,19 @@ import { useI18n } from '../lib/i18n.js'
 
 export const FREE_CHAT_LIMIT = 10
 
-function buildChairmanSystem({ situation, activeDirectors, directorStates, verdict }) {
+// El system prompt está en español y la instrucción de idioma tiene más peso al principio que
+// al final de un mensaje largo — ver la nota en useBoard.js (la versión solo-en-userMsg de esto
+// se probó en vivo y el Chairman seguía respondiendo en español).
+function languageSystemDirective(lang) {
+  return lang === 'en' ? 'IMPORTANT: Write your entire reply in English — natural, warm and direct, not a literal translation.\n\n' : ''
+}
+
+function buildChairmanSystem({ situation, activeDirectors, directorStates, verdict, lang }) {
   const debateSummary = activeDirectors
     .map(d => `${d.name} (${d.title}): ${directorStates[d.id]?.text || ''}`)
     .join('\n\n')
 
-  return `Eres Roberto Alcántara, Chairman de la Junta Directiva AI. Acabas de sintetizar el debate de la junta sobre la situación del usuario y ya diste tu veredicto. Ahora el usuario te hace preguntas de seguimiento directamente a ti.
+  return `${languageSystemDirective(lang)}Eres Roberto Alcántara, Chairman de la Junta Directiva AI. Acabas de sintetizar el debate de la junta sobre la situación del usuario y ya diste tu veredicto. Ahora el usuario te hace preguntas de seguimiento directamente a ti.
 
 SITUACIÓN ORIGINAL:
 ${situation}
@@ -39,10 +46,10 @@ export function useChairmanChat() {
     setMessages(prev => [...prev, { role: 'user', content: question, attachments: attachments.map(a => a.name) }, { role: 'assistant', content: '' }])
 
     try {
-      const system = buildChairmanSystem(sessionContext)
+      const system = buildChairmanSystem({ ...sessionContext, lang })
       const history = messages.map(m => `${m.role === 'user' ? 'Usuario' : 'Roberto'}: ${m.content}`).join('\n\n')
       const attachmentContext = attachments.filter(a => a.kind === 'text').map(a => `\n\nADJUNTO: ${a.name}\n${a.text}`).join('')
-      const languageLine = lang === 'en' ? '\n\nAnswer in English — natural, warm and direct, not a literal translation.' : ''
+      const languageLine = lang === 'en' ? '\n\n(Reminder: answer in English.)' : ''
       const userMsg = history
         ? `${history}\n\nUsuario: ${question}\n\nResponde como Roberto.`
         : `Usuario: ${question}\n\nResponde como Roberto.`

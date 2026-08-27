@@ -3,14 +3,22 @@ import { DIRECTORS } from '../lib/directors.js'
 import { streamCompletion } from '../lib/aiClient.js'
 import { useI18n } from '../lib/i18n.js'
 
+// El system prompt de cada director está cargado de instrucciones y convenciones en español
+// (tono, cierre, etc.) — el modelo las prioriza sobre una nota suelta al final del mensaje de
+// usuario, así que la instrucción de idioma va como primera línea del system prompt (ver
+// useBoard.js, donde una versión solo-en-userMsg de esto se probó en vivo y no funcionó).
+function languageSystemDirective(lang) {
+  return lang === 'en' ? 'IMPORTANT: Write your entire reply in English — natural, warm and direct, not a literal translation. This applies to every line, including any closing conviction statement.\n\n' : ''
+}
+
 // Opinión exprés (2-3 frases) de un director que no participó en el debate en vivo —
 // para que ningún miembro de la junta de 12 quede sin decir nada en el informe.
 async function quickTake({ director, situation, apiKey, provider, lang }) {
-  const languageLine = lang === 'en' ? '\n\nAnswer in English.' : ''
+  const languageLine = lang === 'en' ? '\n\n(Reminder: answer in English.)' : ''
   const userMsg = `SITUACIÓN: ${situation}
 
 Como ${director.name} (${director.title}), da tu opinión exprés en 2-3 frases desde tu especialidad. No es un análisis largo — solo tu primera reacción experta y directa, sin rodeos.${languageLine}`
-  return streamCompletion({ provider, apiKey, system: director.systemPrompt, userMsg, maxTokens: 260, serverMode: 'premium' })
+  return streamCompletion({ provider, apiKey, system: languageSystemDirective(lang) + director.systemPrompt, userMsg, maxTokens: 260, serverMode: 'premium' })
 }
 
 // Encabezados exactos que también reconocen ReportModal.jsx (iconos, checklist, secciones)
@@ -23,9 +31,9 @@ const HEADERS_EN = ['FIRST WIN IN 48 HOURS', '3 WEEK PLAN', 'ESSENTIAL ACTIONS',
 function buildReportSystem(lang) {
   const en = lang === 'en'
   const [H1, H2, H3, H4, H5, H6, H7, H8, H9, H10] = en ? HEADERS_EN : HEADERS_ES
-  const languageLine = en ? '\n\nIDIOMA: escribe el informe COMPLETO en inglés — saludo inicial, cada sección y despedida incluidos. Usa exactamente estos encabezados en inglés, tal cual y en mayúsculas (no los traduzcas de otra forma ni los dejes en español).' : ''
+  const languageLine = en ? 'IMPORTANT: write the ENTIRE report in English — opening greeting, every section and the farewell included. Use exactly these English headers below, verbatim and in capitals (do not translate them differently or leave them in Spanish).\n\n' : ''
 
-  return `Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces un PLAN DE ACCIÓN para un autoempleado o microempresa de 1-3 personas — sin departamentos ni presupuesto de cinco cifras; la única persona que va a ejecutar esto es quien te lee. El usuario ya tiene gratis el veredicto: no lo repitas ni lo reformules; conviértelo en ejecución concreta que se pueda empezar hoy.${languageLine}
+  return `${languageLine}Eres el equipo editorial de Junta Directiva AI. A partir de un debate ya completado, produces un PLAN DE ACCIÓN para un autoempleado o microempresa de 1-3 personas — sin departamentos ni presupuesto de cinco cifras; la única persona que va a ejecutar esto es quien te lee. El usuario ya tiene gratis el veredicto: no lo repitas ni lo reformules; conviértelo en ejecución concreta que se pueda empezar hoy.
 
 TONO: eres cercano, cálido y profesional a la vez — como un mentor, un jefe o incluso un padre que quiere que a esta persona le vaya bien. Hazla sentir acompañada y especial, sin perder ni un gramo de rigor ni de experiencia. Nada de frialdad de consultora ni de jerga corporativa.
 
