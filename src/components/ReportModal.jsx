@@ -4,31 +4,82 @@ import { downloadExecutiveReportPdf } from '../lib/reportPdf.js'
 const KNOWN_HEADERS = [
   'PRIMERA VICTORIA 48 HORAS',
   'PLAN DE 3 SEMANAS',
-  'ACCIONES PRIORITARIAS',
+  'ACCIONES IMPRESCINDIBLES',
+  'ACCIONES NECESARIAS',
+  'ACCIONES PARA MÁS ADELANTE',
   'TÚ O UN FREELANCER',
   'SEÑALES QUE MIRAR',
   'RIESGOS Y CÓMO EVITARLOS',
   'SI OCURRE ESTO HAZ AQUELLO',
+  'TU LISTA DE CONFIRMACIÓN',
 ]
 
+const SECTION_ICONS = {
+  'PRIMERA VICTORIA 48 HORAS': '⚡',
+  'PLAN DE 3 SEMANAS': '🗓️',
+  'ACCIONES IMPRESCINDIBLES': '🎯',
+  'ACCIONES NECESARIAS': '✅',
+  'ACCIONES PARA MÁS ADELANTE': '🌱',
+  'TÚ O UN FREELANCER': '🙋',
+  'SEÑALES QUE MIRAR': '📊',
+  'RIESGOS Y CÓMO EVITARLOS': '⚠️',
+  'SI OCURRE ESTO HAZ AQUELLO': '🔀',
+  'TU LISTA DE CONFIRMACIÓN': '✔️',
+}
+
+function iconForTitle(title) {
+  const upper = title.toUpperCase()
+  const key = KNOWN_HEADERS.find(h => upper === h || upper.startsWith(h))
+  return key ? SECTION_ICONS[key] : '📌'
+}
+
+// Una línea "---" del modelo se trata como separador visual (<hr>), no como texto literal —
+// también marca dónde termina la parte "checklist" de TU LISTA DE CONFIRMACIÓN y empieza la
+// despedida en prosa (ver CIERRE en REPORT_SYSTEM_PAID, useReport.js), para no ponerle
+// casilla de checklist a un párrafo de despedida.
 function parseSections(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
   const sections = []
   let current = null
   for (const line of lines) {
+    if (/^-{3,}$/.test(line)) {
+      current?.lines.push({ divider: true })
+      continue
+    }
     const clean = line.replace(/^#+\s*/, '').replace(/\*\*/g, '')
     const isHeader = KNOWN_HEADERS.some(h => clean.toUpperCase() === h || clean.toUpperCase().startsWith(h))
     if (isHeader) {
       current = { title: clean, lines: [] }
       sections.push(current)
     } else if (current) {
-      current.lines.push(clean)
+      current.lines.push({ text: clean })
     } else {
-      current = { title: '', lines: [clean] }
+      current = { title: '', lines: [{ text: clean }] }
       sections.push(current)
     }
   }
   return sections
+}
+
+// Convierte [texto](url) y URLs sueltas en enlaces clicables reales; el resto del texto
+// se deja tal cual. Se usa tanto en las secciones del informe como en las opiniones exprés.
+function renderRichText(text) {
+  const re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)]+)/g
+  const parts = []
+  let last = 0
+  let m
+  while ((m = re.exec(text))) {
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    const [href, label] = m[1] ? [m[2], m[1]] : [m[3], m[3]]
+    parts.push(
+      <a key={m.index} href={href} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)', textDecoration: 'underline' }}>
+        {label}
+      </a>
+    )
+    last = re.lastIndex
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts
 }
 
 export default function ReportModal({ situation, verdict, report, loading, error, onClose, onUpgrade, upgrading }) {
@@ -72,18 +123,33 @@ export default function ReportModal({ situation, verdict, report, loading, error
 
           {report && !loading && (
             <>
-              {parseSections(report.text).map((section, i) => (
-                <div key={i} style={{ marginBottom: '22px' }}>
-                  {section.title && (
-                    <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: '10px' }}>
-                      {section.title}
-                    </p>
-                  )}
-                  {section.lines.map((l, j) => (
-                    <p key={j} style={{ fontSize: '13.5px', lineHeight: 1.7, color: 'var(--t1)', marginBottom: '8px' }}>{l}</p>
-                  ))}
-                </div>
-              ))}
+              {parseSections(report.text).map((section, i) => {
+                const isChecklist = section.title.toUpperCase().startsWith('TU LISTA DE CONFIRMACIÓN')
+                let pastDivider = false
+                return (
+                  <div key={i} style={{ marginBottom: '26px' }}>
+                    {section.title && (
+                      <p style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                        <span style={{ fontSize: '14px' }}>{iconForTitle(section.title)}</span>
+                        {section.title}
+                      </p>
+                    )}
+                    {section.lines.map((l, j) => {
+                      if (l.divider) {
+                        pastDivider = true
+                        return <hr key={j} style={{ border: 'none', borderTop: '1px solid var(--bd)', margin: '16px 0' }} />
+                      }
+                      const showCheckbox = isChecklist && !pastDivider
+                      return (
+                        <p key={j} style={{ fontSize: '13.5px', lineHeight: 1.75, color: 'var(--t1)', marginBottom: '10px', display: showCheckbox ? 'flex' : 'block', gap: showCheckbox ? '9px' : 0 }}>
+                          {showCheckbox && <span style={{ flexShrink: 0, color: 'var(--blue)' }}>☐</span>}
+                          <span>{renderRichText(l.text)}</span>
+                        </p>
+                      )
+                    })}
+                  </div>
+                )
+              })}
 
               {report.locked && (
                 <div style={{ marginBottom: '22px', padding: '18px', borderRadius: 'var(--r-md)', border: '1px dashed var(--blue-bd)', background: 'var(--blue-dim)' }}>
@@ -91,7 +157,7 @@ export default function ReportModal({ situation, verdict, report, loading, error
                     🔒 Plan de mejora paso a paso
                   </p>
                   <p style={{ fontSize: '13px', color: 'var(--t2)', lineHeight: 1.6, marginBottom: '12px' }}>
-                    Ya tienes gratis el resumen, las ideas, recursos y opiniones de la junta. El informe completo añade 6 a 8 pasos concretos y priorizados, con el esfuerzo estimado de cada uno, y permite descargarlo.
+                    Ya tienes gratis el resumen, las ideas, recursos y opiniones de la junta. El informe completo añade tu primera victoria en 48 horas, un plan de 3 semanas, las acciones organizadas por prioridad con el porqué de cada una, y una lista de confirmación paso a paso — todo descargable.
                   </p>
                   <button
                     onClick={onUpgrade}
@@ -115,7 +181,7 @@ export default function ReportModal({ situation, verdict, report, loading, error
                       </div>
                       <div>
                         <p style={{ fontSize: '12px', fontWeight: 700, color: director.color, marginBottom: '2px' }}>{director.name} <span style={{ fontWeight: 400, color: 'var(--t3)' }}>· {director.title}</span></p>
-                        <p style={{ fontSize: '13px', color: 'var(--t2)', lineHeight: 1.6 }}>{text}</p>
+                        <p style={{ fontSize: '13px', color: 'var(--t2)', lineHeight: 1.6 }}>{renderRichText(text)}</p>
                       </div>
                     </div>
                   ))}

@@ -4,8 +4,18 @@ const TEAL = [35, 190, 174]
 const INK = [30, 42, 68]
 const MUTED = [93, 110, 142]
 
+// El PDF es texto plano via jsPDF (sin soporte de enlaces clicables ni negrita inline aqui),
+// asi que el markdown que trae el informe se limpia a algo legible en vez de mostrarse literal:
+// "[Google Sheets](https://...)" -> "Google Sheets (https://...)" y "**palabra**" -> "palabra".
+// Las lineas "---" (separadores visuales en la vista del modal) no aportan nada en PDF, se quitan.
 function safe(value = '') {
-  return String(value).replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim()
+  return String(value)
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1 ($2)')
+    .replace(/\*\*/g, '')
+    .replace(/(^|\s)-{2,}(\s|$)/g, ' ')
+    .replace(/[\u0000-\u001f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function splitSections(text = '') {
