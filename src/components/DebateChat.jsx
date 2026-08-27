@@ -1,21 +1,21 @@
 import React from 'react'
 import { classifyVote } from '../lib/consensus.js'
+import { useI18n } from '../lib/i18n.js'
 
-// 'contra' es la salida interna del clasificador para "convicción condicionada a X" — una
-// recomendación constructiva con condiciones, no una oposición (ver src/lib/consensus.js).
-const VOTE_BADGE = {
-  favor:  { icon: '✓', label: 'A favor' },
-  contra: { icon: '⚡', label: 'Condicionada' },
-  mixto:  { icon: '~', label: 'Con matices' },
-}
-
-function Bubble({ director, state, onClick }) {
+function Bubble({ director, state, onClick, t }) {
   const { status, text, error } = state
   const isStreaming = status === 'streaming'
   const isDone = status === 'done'
   const isError = status === 'error'
   const { color, colorDim, colorBorder } = director
 
+  // 'contra' es la salida interna del clasificador para "convicción condicionada a X" — una
+  // recomendación constructiva con condiciones, no una oposición (ver src/lib/consensus.js).
+  const VOTE_BADGE = {
+    favor:  { icon: '✓', label: t('vote.favor') },
+    contra: { icon: '⚡', label: t('vote.contra') },
+    mixto:  { icon: '~', label: t('vote.mixto') },
+  }
   const vote = isDone ? classifyVote(director.id, text) : null
   const badge = vote ? VOTE_BADGE[vote] : null
 
@@ -23,7 +23,7 @@ function Bubble({ director, state, onClick }) {
     <div className="slide-in" style={{ display: 'flex', gap: '12px', marginBottom: '20px', alignItems: 'flex-start' }}>
       <button
         onClick={onClick}
-        title={`Ver perfil de ${director.name}`}
+        title={t('debate.viewProfile').replace('{name}', director.name)}
         style={{
           width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
           background: colorDim, border: `1px solid ${colorBorder}`,
@@ -36,8 +36,8 @@ function Bubble({ director, state, onClick }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '5px', flexWrap: 'wrap' }}>
           <button onClick={onClick} style={{ fontSize: '13px', fontWeight: 700, color }}>{director.name}</button>
-          <span style={{ fontSize: '11px', color: 'var(--t3)' }}>Especialidad · {director.tags[0]}</span>
-          {isStreaming && <span style={{ fontSize: '11px', color, opacity: .8 }}>escribiendo…</span>}
+          <span style={{ fontSize: '11px', color: 'var(--t3)' }}>{t('debate.specialty')} · {director.tags[0]}</span>
+          {isStreaming && <span style={{ fontSize: '11px', color, opacity: .8 }}>{t('debate.writing')}</span>}
         </div>
 
         <div style={{
@@ -47,7 +47,7 @@ function Bubble({ director, state, onClick }) {
           maxWidth: '620px',
         }}>
           {isError ? (
-            <p style={{ fontSize: '13px', color: 'var(--red)' }}>No pudo responder: {error}</p>
+            <p style={{ fontSize: '13px', color: 'var(--red)' }}>{t('debate.couldNotRespond')} {error}</p>
           ) : (
             <>
               {text.split('\n').filter(l => l.trim()).map((p, i) => (
@@ -73,6 +73,7 @@ function Bubble({ director, state, onClick }) {
 }
 
 export default function DebateChat({ directors, directorStates, phase = 'debating', onClickDirector }) {
+  const { t } = useI18n()
   const started = directors.filter(d => ['streaming', 'done', 'error'].includes(directorStates[d.id]?.status))
   const pending = directors.filter(d => (directorStates[d.id]?.status || 'pending') === 'pending')
   const done = directors.length - pending.length - directors.filter(d => directorStates[d.id]?.status === 'streaming').length
@@ -81,15 +82,15 @@ export default function DebateChat({ directors, directorStates, phase = 'debatin
   return (
     <div>
       {phase !== 'done' && <div role="status" aria-live="polite" style={{ marginBottom: '16px', padding: '11px 14px', borderLeft: '2px solid var(--blue)', background: 'var(--blue-dim)', color: 'var(--t2)', fontSize: '12px' }}>
-        {phase === 'contrasting' ? 'La junta está contrastando sus hallazgos.' : phase === 'verdict' ? 'El Chairman está sintetizando la decisión.' : `Especialistas trabajando en paralelo · ${Math.max(done, 0)}/${directors.length}` } <span style={{ color: 'var(--blue)' }}>· estimado {estimate}</span>
+        {phase === 'contrasting' ? t('debate.contrasting') : phase === 'verdict' ? t('debate.synthesizing') : t('debate.parallelWork').replace('{done}', Math.max(done, 0)).replace('{total}', directors.length) } <span style={{ color: 'var(--blue)' }}>· {t('debate.estimated')} {estimate}</span>
       </div>}
       {started.map(d => (
-        <Bubble key={d.id} director={d} state={directorStates[d.id]} onClick={() => onClickDirector(d)} />
+        <Bubble key={d.id} director={d} state={directorStates[d.id]} onClick={() => onClickDirector(d)} t={t} />
       ))}
 
       {pending.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '8px 0' }}>
-          <span style={{ fontSize: '11px', color: 'var(--t3)' }}>En cola:</span>
+          <span style={{ fontSize: '11px', color: 'var(--t3)' }}>{t('debate.queued')}</span>
           {pending.map(d => (
             <span
               key={d.id}

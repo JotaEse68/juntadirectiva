@@ -403,12 +403,14 @@ function AppInner() {
     window.history.replaceState({}, '', '/')
   }
 
-  // Extrae el voto de un director del texto generado
+  // Extrae el voto de un director del texto generado — el texto puede llegar en español o en
+  // inglés según el idioma de la UI (ver languageSystemDirective en useBoard.js), así que las
+  // palabras clave cubren ambos.
   const getDirectorVote = (dirId) => {
     const state = directorStates[dirId]
     if (!state?.text) return null
     const lines = state.text.split('\n').filter(l => l.trim())
-    const keywords = ['convicción', 'voto:', 'posición:', 'evaluación:', 'veredicto:']
+    const keywords = ['convicción', 'voto:', 'posición:', 'evaluación:', 'veredicto:', 'conviction', 'vote:', 'position:', 'assessment:', 'verdict:']
     for (const line of lines.slice(-5)) {
       if (keywords.some(k => line.toLowerCase().includes(k))) return line.trim()
     }
@@ -794,7 +796,7 @@ function AppInner() {
 
         <DirectorsRoster directors={DIRECTORS} onClickDirector={setSelectedDirector} />
 
-        <footer className="site-footer" aria-label="Información del sitio">
+        <footer className="site-footer" aria-label={t('footer.siteInfo')}>
           <div className="site-footer__topline"><div><p className="site-footer__product">{t('footer.product')}</p><p className="site-footer__tagline">{t('footer.tagline')}</p></div><nav className="site-footer__links" aria-label={t('footer.linksLabel')}><a href="https://jsantos.pro/" target="_blank" rel="noreferrer">Jota Santos</a><a href="https://iapacks.com/" target="_blank" rel="noreferrer">IA Packs</a></nav></div>
           <details className="site-footer__legal"><summary>{t('footer.disclaimerSummary')}</summary><div className="site-footer__legal-copy"><p><strong>{t('footer.disclaimerLabel')}</strong> {t('footer.disclaimer')}</p><p><strong>{t('footer.useLabel')}</strong> {t('footer.use')}</p><p><strong>{t('footer.rightsLabel')}</strong> {t('footer.rights')}</p></div></details>
         </footer>
@@ -815,7 +817,7 @@ function AppInner() {
             cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
           }}
         >
-          📄 {report.locked ? 'Ver ampliación gratuita' : 'Ver informe'}
+          {report.locked ? t('report.reopenLocked') : t('report.reopen')}
         </button>
       )}
 

@@ -1,6 +1,8 @@
 import React from 'react'
+import { useI18n } from '../lib/i18n.js'
 
 export default function DirectorModal({ director, sessionVote, onClose }) {
+  const { t } = useI18n()
   if (!director) return null
 
   const isJottarina = director.id === 'jottarina'
@@ -44,7 +46,7 @@ export default function DirectorModal({ director, sessionVote, onClose }) {
           {director.name}
         </p>
         <p style={{ fontSize: '13px', color: 'var(--t2)', textAlign: 'center', marginBottom: '18px' }}>
-          Especialidad · {director.tags[0]}
+          {t('debate.specialty')} · {director.tags[0]}
         </p>
 
         {/* Tags */}
@@ -66,7 +68,7 @@ export default function DirectorModal({ director, sessionVote, onClose }) {
 
         {/* Qué aporta */}
         <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 500 }}>
-          Qué aporta en cada sesión
+          {t('directorModal.whatTheyBring')}
         </p>
         <p style={{ fontSize: '13px', color: 'var(--t2)', lineHeight: 1.65, marginBottom: '18px' }}>
           {director.contribution}
@@ -80,7 +82,7 @@ export default function DirectorModal({ director, sessionVote, onClose }) {
             marginBottom: '18px',
           }}>
             <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '4px' }}>
-              Posición en esta sesión
+              {t('directorModal.positionThisSession')}
             </p>
             <p style={{ fontSize: '13px', color: accent, fontWeight: 600 }}>{sessionVote}</p>
           </div>
@@ -96,7 +98,7 @@ export default function DirectorModal({ director, sessionVote, onClose }) {
             color: 'var(--t2)', fontSize: '13px',
           }}
         >
-          Cerrar
+          {t('directorModal.close')}
         </button>
       </div>
     </div>

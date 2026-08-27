@@ -2,8 +2,10 @@ import React, { useRef, useState } from 'react'
 import { FREE_CHAT_LIMIT } from '../hooks/useChairmanChat.js'
 import { prepareChatAttachment } from '../lib/chatAttachments.js'
 import { downloadChairmanReplyPdf } from '../lib/reportPdf.js'
+import { useI18n } from '../lib/i18n.js'
 
 export default function ChairmanChat({ messages, sending, error, freeMessagesUsed, hasKey, premiumAccess, onSend, situation }) {
+  const { t } = useI18n()
   const [input, setInput] = useState('')
   const [attachment, setAttachment] = useState(null)
   const [attachmentError, setAttachmentError] = useState(null)
@@ -14,7 +16,7 @@ export default function ChairmanChat({ messages, sending, error, freeMessagesUse
 
   const handleSend = () => {
     if (!canSend) return
-    onSend(input || 'Revisa el material adjunto y dime cómo cambia la decisión.', attachment ? [attachment] : [])
+    onSend(input || t('chairman.defaultAttachmentPrompt'), attachment ? [attachment] : [])
     setInput('')
     setAttachment(null)
   }
@@ -32,11 +34,11 @@ export default function ChairmanChat({ messages, sending, error, freeMessagesUse
       <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '16px' }}>💬</span>
-          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--t1)' }}>Pregúntale al Chairman</p>
+          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--t1)' }}>{t('chairman.askTitle')}</p>
         </div>
           {!hasKey && !premiumAccess && (
           <span style={{ fontSize: '11px', color: 'var(--t3)' }}>
-            {Math.min(freeMessagesUsed, FREE_CHAT_LIMIT)}/{FREE_CHAT_LIMIT} mensajes gratis
+            {t('chairman.freeMessages').replace('{used}', Math.min(freeMessagesUsed, FREE_CHAT_LIMIT)).replace('{total}', FREE_CHAT_LIMIT)}
           </span>
         )}
       </div>
@@ -57,7 +59,7 @@ export default function ChairmanChat({ messages, sending, error, freeMessagesUse
                   {m.content || (sending && i === messages.length - 1 ? '···' : '')}
                 </p>
                 {m.attachments?.length > 0 && <p style={{ marginTop: '6px', fontSize: '10px', color: 'var(--blue)' }}>📎 {m.attachments.join(', ')}</p>}
-                {m.role === 'assistant' && m.content && premiumAccess && <button onClick={() => downloadChairmanReplyPdf({ situation, reply: m.content })} style={{ marginTop: '9px', padding: '6px 9px', borderRadius: '6px', border: '1px solid var(--blue-bd)', background: 'var(--blue-dim)', color: 'var(--blue)', fontSize: '11px', fontWeight: 700 }}>↓ Guardar en PDF</button>}
+                {m.role === 'assistant' && m.content && premiumAccess && <button onClick={() => downloadChairmanReplyPdf({ situation, reply: m.content })} style={{ marginTop: '9px', padding: '6px 9px', borderRadius: '6px', border: '1px solid var(--blue-bd)', background: 'var(--blue-dim)', color: 'var(--blue)', fontSize: '11px', fontWeight: 700 }}>{t('chairman.saveAsPdf')}</button>}
               </div>
             </div>
           ))}
@@ -75,20 +77,20 @@ export default function ChairmanChat({ messages, sending, error, freeMessagesUse
       <div style={{ padding: '16px 22px' }}>
         {limitReached ? (
           <div style={{ padding: '12px 16px', background: 'var(--blue-dim)', border: '1px solid var(--blue-bd)', borderRadius: 'var(--r-md)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-            <p style={{ fontSize: '12px', color: 'var(--t2)' }}>Llegaste al límite gratis de esta sesión.</p>
-            <span style={{ fontSize: '12px', color: 'var(--t3)' }}>Podrás volver a preguntar en la próxima sesión.</span>
+            <p style={{ fontSize: '12px', color: 'var(--t2)' }}>{t('chairman.limitReached')}</p>
+            <span style={{ fontSize: '12px', color: 'var(--t3)' }}>{t('chairman.limitReachedHint')}</span>
           </div>
         ) : (
           <div>
-            {premiumAccess && attachment && <div style={{ marginBottom: '8px', display: 'inline-flex', gap: '7px', alignItems: 'center', padding: '6px 9px', border: '1px solid var(--blue-bd)', borderRadius: '7px', background: 'var(--blue-dim)', color: 'var(--blue)', fontSize: '11px' }}>📎 {attachment.name}<button type="button" onClick={() => setAttachment(null)} aria-label="Quitar adjunto" style={{ color: 'var(--blue)', fontSize: '15px' }}>×</button></div>}
+            {premiumAccess && attachment && <div style={{ marginBottom: '8px', display: 'inline-flex', gap: '7px', alignItems: 'center', padding: '6px 9px', border: '1px solid var(--blue-bd)', borderRadius: '7px', background: 'var(--blue-dim)', color: 'var(--blue)', fontSize: '11px' }}>📎 {attachment.name}<button type="button" onClick={() => setAttachment(null)} aria-label={t('chairman.removeAttachment')} style={{ color: 'var(--blue)', fontSize: '15px' }}>×</button></div>}
             <div style={{ display: 'flex', gap: '8px' }}>
-            {premiumAccess && <><input ref={fileRef} type="file" accept="image/*,.pdf,.md,.txt" onChange={handleAttachment} hidden /><button type="button" onClick={() => fileRef.current?.click()} disabled={sending} title="Adjuntar imagen, PDF, Markdown o texto" style={{ padding: '11px', border: '1px solid var(--bd)', borderRadius: 'var(--r-sm)', color: 'var(--t2)' }}>📎</button></>}
+            {premiumAccess && <><input ref={fileRef} type="file" accept="image/*,.pdf,.md,.txt" onChange={handleAttachment} hidden /><button type="button" onClick={() => fileRef.current?.click()} disabled={sending} title={t('chairman.attachHint')} style={{ padding: '11px', border: '1px solid var(--bd)', borderRadius: 'var(--r-sm)', color: 'var(--t2)' }}>📎</button></>}
             <input
               type="text"
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && canSend) handleSend() }}
-              placeholder="Pregunta algo sobre el veredicto o el debate..."
+              placeholder={t('chairman.inputPlaceholder')}
               disabled={sending}
               style={{ flex: 1, padding: '11px 14px', background: 'var(--bg3)', border: '1px solid var(--bd)', borderRadius: 'var(--r-sm)', color: 'var(--t1)', fontSize: '13px', outline: 'none' }}
             />
@@ -97,10 +99,10 @@ export default function ChairmanChat({ messages, sending, error, freeMessagesUse
               disabled={!canSend}
               style={{ padding: '11px 18px', borderRadius: 'var(--r-sm)', border: 'none', background: canSend ? 'var(--blue)' : 'var(--bg3)', color: canSend ? 'var(--bg0)' : 'var(--t3)', fontSize: '13px', fontWeight: 700, cursor: canSend ? 'pointer' : 'not-allowed' }}
             >
-              {sending ? '...' : 'Enviar'}
+              {sending ? '...' : t('chairman.send')}
             </button>
             </div>
-            {!premiumAccess && <p style={{ marginTop: '8px', fontSize: '10px', color: 'var(--t3)' }}>El reanálisis con PDF, Markdown e imágenes y la exportación PDF forman parte de la sesión premium.</p>}
+            {!premiumAccess && <p style={{ marginTop: '8px', fontSize: '10px', color: 'var(--t3)' }}>{t('chairman.premiumNote')}</p>}
           </div>
         )}
       </div>

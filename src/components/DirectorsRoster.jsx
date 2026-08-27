@@ -1,13 +1,15 @@
 import React from 'react'
+import { useI18n } from '../lib/i18n.js'
 
 export default function DirectorsRoster({ directors, onClickDirector }) {
+  const { t } = useI18n()
   return (
     <section style={{ marginTop: '72px', paddingTop: '40px', borderTop: '1px solid var(--bd)' }}>
       <p style={{ fontSize: '11px', color: 'var(--t3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '4px', textAlign: 'center', fontWeight: 500 }}>
-        Directorio completo
+        {t('roster.fullDirectory')}
       </p>
       <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: '26px', fontWeight: 400, color: 'var(--t1)', textAlign: 'center', marginBottom: '32px' }}>
-        Conoce a tu junta
+        {t('roster.meetYourBoard')}
       </h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
         {directors.map(d => {
@@ -36,7 +38,7 @@ export default function DirectorsRoster({ directors, onClickDirector }) {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--t1)', marginBottom: '1px' }}>{d.name}</p>
-                <p style={{ fontSize: '11px', color: accent, marginBottom: '6px' }}>Especialidad · {d.tags[0]}</p>
+                <p style={{ fontSize: '11px', color: accent, marginBottom: '6px' }}>{t('debate.specialty')} · {d.tags[0]}</p>
                 <p style={{ fontSize: '12px', color: 'var(--t3)', lineHeight: 1.55 }}>{d.contribution}</p>
               </div>
             </button>

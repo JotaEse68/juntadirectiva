@@ -1,21 +1,28 @@
 import React from 'react'
+import { useI18n } from '../lib/i18n.js'
 
-function detectVerdict(text) {
+// Detecta palabras clave en el propio texto del veredicto — que ahora puede llegar en español
+// o en inglés según el idioma de la UI (ver languageSystemDirective en useBoard.js), así que
+// cada patrón tiene su equivalente en los dos idiomas.
+function detectVerdict(text, t) {
   if (!text) return null
   const lo = text.toLowerCase()
   // Orden importante: los patrones más específicos van primero porque "proceder así..."
   // también contiene la subcadena "proceder" y haría match con el caso llano si se
   // comprobara antes.
-  if (lo.includes('replantear') || lo.includes('no proceder') || lo.includes('parar') || lo.includes('no recomiendo'))
-    return { label: 'Replantear', color: 'var(--red)', icon: '✗' }
-  if (lo.includes('proceder así') || lo.includes('proceder asi') || lo.includes('con condiciones') || lo.includes('con ajustes') || lo.includes('sí, pero') || lo.includes('si, pero'))
-    return { label: 'Proceder con ajustes', color: 'var(--blue-lt)', icon: '⚡' }
-  if (lo.includes('proceder') || lo.includes('adelante') || lo.includes('apruebo') || lo.includes('recomiendo'))
-    return { label: 'Proceder', color: 'var(--blue)', icon: '✓' }
+  if (lo.includes('replantear') || lo.includes('no proceder') || lo.includes('parar') || lo.includes('no recomiendo') ||
+      lo.includes('reconsider') || lo.includes("don't proceed") || lo.includes('do not proceed') || lo.includes('not recommend'))
+    return { label: t('verdict.reconsider'), color: 'var(--red)', icon: '✗' }
+  if (lo.includes('proceder así') || lo.includes('proceder asi') || lo.includes('con condiciones') || lo.includes('con ajustes') || lo.includes('sí, pero') || lo.includes('si, pero') ||
+      lo.includes('proceed with adjustments') || lo.includes('proceed, with') || lo.includes('yes, but'))
+    return { label: t('verdict.proceedWithAdjustments'), color: 'var(--blue-lt)', icon: '⚡' }
+  if (lo.includes('proceder') || lo.includes('adelante') || lo.includes('apruebo') || lo.includes('recomiendo') ||
+      lo.includes('proceed') || lo.includes('go ahead') || lo.includes('i recommend'))
+    return { label: t('verdict.proceed'), color: 'var(--blue)', icon: '✓' }
   return null
 }
 
-function ConsensusBar({ consensus }) {
+function ConsensusBar({ consensus, t }) {
   if (!consensus || consensus.total === 0) return null
   const { favor, contra, mixto, sinDato, total } = consensus
   // 'contra' es la salida interna del clasificador para "convicción condicionada a X" — una
@@ -23,10 +30,10 @@ function ConsensusBar({ consensus }) {
   // a favor/en contra de un plan único, así que se muestra en ámbar como "condicionada",
   // nunca en rojo como si fuera un voto negativo.
   const segments = [
-    { key: 'favor', value: favor, color: 'var(--blue)', label: 'a favor' },
-    { key: 'mixto', value: mixto, color: '#f5a623', label: 'con matices' },
-    { key: 'contra', value: contra, color: '#e08a1e', label: 'condicionada' },
-    { key: 'sinDato', value: sinDato, color: 'var(--bd)', label: 'sin postura clara' },
+    { key: 'favor', value: favor, color: 'var(--blue)', label: t('consensus.favor') },
+    { key: 'mixto', value: mixto, color: '#f5a623', label: t('consensus.mixed') },
+    { key: 'contra', value: contra, color: '#e08a1e', label: t('consensus.conditional') },
+    { key: 'sinDato', value: sinDato, color: 'var(--bd)', label: t('consensus.noClearStance') },
   ].filter(s => s.value > 0)
 
   return (
@@ -49,10 +56,11 @@ function ConsensusBar({ consensus }) {
 }
 
 export default function VerdictPanel({ text, loading, consensus }) {
+  const { t } = useI18n()
   if (loading) {
     return (
       <div style={{ background: 'var(--bg2)', border: '1px solid var(--blue-bd)', borderRadius: 'var(--r-xl)', padding: '28px', textAlign: 'center' }}>
-        <p style={{ fontSize: '13px', color: 'var(--blue)', marginBottom: '12px' }}>🏛️ El Chairman sintetiza el debate...</p>
+        <p style={{ fontSize: '13px', color: 'var(--blue)', marginBottom: '12px' }}>{t('verdict.synthesizing')}</p>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '5px' }}>
           <span className="dot"></span><span className="dot"></span><span className="dot"></span>
         </div>
@@ -61,7 +69,7 @@ export default function VerdictPanel({ text, loading, consensus }) {
   }
   if (!text) return null
 
-  const verdict = detectVerdict(text)
+  const verdict = detectVerdict(text, t)
   const paragraphs = text.split('\n').filter(l => l.trim())
 
   return (
@@ -70,8 +78,8 @@ export default function VerdictPanel({ text, loading, consensus }) {
       <div style={{ padding: '18px 24px', background: 'var(--blue-dim)', borderBottom: '1px solid var(--blue-bd)', display: 'flex', alignItems: 'center', gap: '12px' }}>
         <span style={{ fontSize: '22px' }}>🏛️</span>
         <div style={{ flex: 1 }}>
-          <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '2px', fontWeight: 500 }}>Veredicto de la Junta</p>
-          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--t1)' }}>Roberto Alcántara · Chairman</p>
+          <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '2px', fontWeight: 500 }}>{t('verdict.title')}</p>
+          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--t1)' }}>{t('verdict.chairmanRole')}</p>
         </div>
         {verdict && (
           <div style={{ padding: '7px 16px', borderRadius: '20px', background: 'rgba(56,182,255,0.1)', border: `1px solid ${verdict.color}44`, color: verdict.color, fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -80,7 +88,7 @@ export default function VerdictPanel({ text, loading, consensus }) {
         )}
       </div>
 
-      <ConsensusBar consensus={consensus} />
+      <ConsensusBar consensus={consensus} t={t} />
 
       {/* Body */}
       <div style={{ padding: '22px 24px' }}>

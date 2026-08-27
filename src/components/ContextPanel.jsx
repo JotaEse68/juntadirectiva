@@ -1,14 +1,14 @@
 import React, { useState, useRef } from 'react'
+import { useI18n } from '../lib/i18n.js'
 
-const STATUS_LABEL = {
-  extracting:  'Leyendo archivo...',
-  summarizing: 'Resumiendo con IA...',
-  fetching:    'Accediendo a URL...',
-  done:        'Listo',
-  error:       'Error',
-}
-
-function ContextItem({ item, onRemove }) {
+function ContextItem({ item, onRemove, t }) {
+  const STATUS_LABEL = {
+    extracting:  t('context.statusExtracting'),
+    summarizing: t('context.statusSummarizing'),
+    fetching:    t('context.statusFetching'),
+    done:        t('context.statusDone'),
+    error:       t('context.statusError'),
+  }
   const [expanded, setExpanded] = useState(false)
   const isLoading = ['extracting','summarizing','fetching'].includes(item.status)
   const isError   = item.status === 'error'
@@ -41,7 +41,7 @@ function ContextItem({ item, onRemove }) {
                 {STATUS_LABEL[item.status]}
               </span>
             ) : isError ? item.error
-              : `Briefing listo · ${item.summary?.length || 0} chars`
+              : t('context.briefingReady').replace('{n}', item.summary?.length || 0)
             }
           </p>
         </div>
@@ -49,7 +49,7 @@ function ContextItem({ item, onRemove }) {
           {isDone && (
             <button onClick={() => setExpanded(!expanded)}
               style={{ fontSize:'11px', color:'var(--blue)', padding:'3px 7px', border:'1px solid var(--blue-bd)', borderRadius:'4px', background:'transparent', cursor:'pointer' }}>
-              {expanded ? 'Ocultar' : 'Ver'}
+              {expanded ? t('context.hide') : t('context.view')}
             </button>
           )}
           <button onClick={() => onRemove(item.id)}
@@ -68,6 +68,7 @@ function ContextItem({ item, onRemove }) {
 }
 
 export default function ContextPanel({ onProcessFile, onProcessURL, onAddNote, items, onRemove, isProcessing }) {
+  const { t } = useI18n()
   const [urlInput, setUrlInput]   = useState('')
   const [noteInput, setNoteInput] = useState('')
   const [noteOpen, setNoteOpen]   = useState(false)
@@ -148,7 +149,7 @@ export default function ContextPanel({ onProcessFile, onProcessURL, onAddNote, i
             transition:'all .2s',
           }}
         >
-          <span>📝</span> Nota
+          <span>📝</span> {t('context.noteBtn')}
         </button>
       </div>
 
@@ -167,8 +168,8 @@ export default function ContextPanel({ onProcessFile, onProcessURL, onAddNote, i
           onMouseLeave={e => e.currentTarget.style.borderColor='var(--bd)'}
         >
           <p style={{ fontSize:'13px', color:'var(--t3)', lineHeight:1.6 }}>
-            Arrastra archivos aquí o usa los botones<br />
-            <span style={{ fontSize:'11px' }}>PDF · Word · Markdown · URLs · Notas de texto</span>
+            {t('context.dropHint')}<br />
+            <span style={{ fontSize:'11px' }}>{t('context.dropTypes')}</span>
           </p>
         </div>
       )}
@@ -187,7 +188,7 @@ export default function ContextPanel({ onProcessFile, onProcessURL, onAddNote, i
           />
           <button onClick={handleURL} disabled={!urlInput.trim()}
             style={{ padding:'10px 16px', borderRadius:'var(--r-sm)', background: urlInput.trim() ? 'var(--blue)' : 'var(--bg3)', color: urlInput.trim() ? 'var(--bg0)' : 'var(--t3)', border:'none', fontSize:'13px', fontWeight:600, cursor: urlInput.trim() ? 'pointer' : 'not-allowed' }}>
-            Añadir
+            {t('context.add')}
           </button>
         </div>
       )}
@@ -198,7 +199,7 @@ export default function ContextPanel({ onProcessFile, onProcessURL, onAddNote, i
           <textarea
             value={noteInput}
             onChange={e => setNoteInput(e.target.value.slice(0, 2000))}
-            placeholder="Escribe contexto adicional: antecedentes, restricciones, datos relevantes que la junta debería conocer..."
+            placeholder={t('context.notePlaceholder')}
             rows={4}
             autoFocus
             style={{ width:'100%', padding:'12px 14px', background:'var(--bg3)', border:'1px solid var(--blue-bd)', borderRadius:'var(--r-sm)', color:'var(--t1)', fontSize:'13px', lineHeight:1.6, resize:'vertical', outline:'none', minHeight:'90px' }}
@@ -207,7 +208,7 @@ export default function ContextPanel({ onProcessFile, onProcessURL, onAddNote, i
             <span style={{ fontSize:'11px', color:'var(--t3)' }}>{noteInput.length}/2000</span>
             <button onClick={handleNote} disabled={!noteInput.trim()}
               style={{ padding:'8px 16px', borderRadius:'var(--r-sm)', background: noteInput.trim() ? 'var(--blue)' : 'var(--bg3)', color: noteInput.trim() ? 'var(--bg0)' : 'var(--t3)', border:'none', fontSize:'13px', fontWeight:600, cursor: noteInput.trim() ? 'pointer' : 'not-allowed' }}>
-              Añadir nota
+              {t('context.addNote')}
             </button>
           </div>
         </div>
@@ -217,7 +218,7 @@ export default function ContextPanel({ onProcessFile, onProcessURL, onAddNote, i
       {items.length > 0 && (
         <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
           {items.map(item => (
-            <ContextItem key={item.id} item={item} onRemove={onRemove} />
+            <ContextItem key={item.id} item={item} onRemove={onRemove} t={t} />
           ))}
         </div>
       )}

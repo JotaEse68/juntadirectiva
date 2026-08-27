@@ -1,5 +1,6 @@
 import React from 'react'
 import { downloadExecutiveReportPdf } from '../lib/reportPdf.js'
+import { useI18n } from '../lib/i18n.js'
 
 // El informe puede llegar con encabezados en español o en inglés (ver buildReportSystem
 // en useReport.js, que elige el set según el idioma de la UI) — ambos deben reconocerse aquí.
@@ -108,6 +109,7 @@ function renderRichText(rawText) {
 }
 
 export default function ReportModal({ situation, verdict, report, loading, error, onClose, onUpgrade, upgrading }) {
+  const { t } = useI18n()
   const handleDownload = () => {
     downloadExecutiveReportPdf({ situation, verdict, report })
   }
@@ -122,7 +124,7 @@ export default function ReportModal({ situation, verdict, report, loading, error
           <div>
             <p style={{ fontSize: '10px', color: 'var(--blue)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '2px', fontWeight: 500 }}>Junta Directiva AI</p>
             <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--t1)' }}>
-              {report?.locked ? '📄 Ampliación del veredicto' : '📄 Plan de acción'}
+              {report?.locked ? t('report.titleLocked') : t('report.title')}
             </p>
           </div>
           <button onClick={onClose} style={{ fontSize: '18px', color: 'var(--t3)', padding: '4px 8px' }}>×</button>
@@ -132,7 +134,7 @@ export default function ReportModal({ situation, verdict, report, loading, error
           {loading && (
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
               <p style={{ fontSize: '13px', color: 'var(--blue)', marginBottom: '12px' }}>
-                Consultando a los directores que no debatieron en vivo y ampliando el análisis...
+                {t('report.loadingText')}
               </p>
               <div style={{ display: 'flex', justifyContent: 'center', gap: '5px' }}>
                 <span className="dot"></span><span className="dot"></span><span className="dot"></span>
@@ -185,14 +187,14 @@ export default function ReportModal({ situation, verdict, report, loading, error
                     🔒 Plan de mejora paso a paso
                   </p>
                   <p style={{ fontSize: '13px', color: 'var(--t2)', lineHeight: 1.6, marginBottom: '12px' }}>
-                    Ya tienes gratis el resumen, las ideas, recursos y opiniones de la junta. El informe completo añade tu primera victoria en 48 horas, un plan de 3 semanas, las acciones organizadas por prioridad con el porqué de cada una, y una lista de confirmación paso a paso — todo descargable.
+                    {t('report.lockedDesc')}
                   </p>
                   <button
                     onClick={onUpgrade}
                     disabled={upgrading}
                     style={{ padding: '10px 18px', borderRadius: 'var(--r-sm)', border: 'none', background: upgrading ? 'var(--bg3)' : 'var(--blue)', color: upgrading ? 'var(--t2)' : 'var(--bg0)', fontSize: '13px', fontWeight: 700, cursor: upgrading ? 'not-allowed' : 'pointer' }}
                   >
-                    {upgrading ? 'Procesando...' : 'Crear mi plan de acción · 4,99 €'}
+                    {upgrading ? t('dailyLimit.processing') : t('report.upgradeCta')}
                   </button>
                 </div>
               )}
@@ -200,7 +202,7 @@ export default function ReportModal({ situation, verdict, report, loading, error
               {report.quickTakes?.length > 0 && (
                 <div style={{ marginTop: '28px', paddingTop: '20px', borderTop: '1px solid var(--bd)' }}>
                   <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: '14px' }}>
-                    Opinión exprés de los demás directores
+                    {t('report.quickTakesHeader')}
                   </p>
                   {report.quickTakes.map(({ director, text }) => (
                     <div key={director.id} style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
@@ -221,10 +223,10 @@ export default function ReportModal({ situation, verdict, report, loading, error
 
         {report && !loading && (
           <div style={{ padding: '16px 28px', borderTop: '1px solid var(--bd)', display: 'flex', gap: '8px' }}>
-            <button onClick={onClose} style={{ flex: 1, padding: '11px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t2)', fontSize: '13px' }}>Cerrar</button>
+            <button onClick={onClose} style={{ flex: 1, padding: '11px', borderRadius: 'var(--r-sm)', border: '1px solid var(--bd)', color: 'var(--t2)', fontSize: '13px' }}>{t('report.close')}</button>
             {!report.locked && (
               <button onClick={handleDownload} style={{ flex: 2, padding: '11px', borderRadius: 'var(--r-sm)', border: 'none', background: 'var(--blue)', color: 'var(--bg0)', fontSize: '13px', fontWeight: 700 }}>
-                ⬇️ Descargar PDF ejecutivo
+                {t('report.downloadPdf')}
               </button>
             )}
           </div>
