@@ -13,12 +13,12 @@ function languageSystemDirective(lang) {
 
 // Opinión exprés (2-3 frases) de un director que no participó en el debate en vivo —
 // para que ningún miembro de la junta de 12 quede sin decir nada en el informe.
-async function quickTake({ director, situation, apiKey, provider, lang }) {
+async function quickTake({ director, situation, apiKey, provider, reportTicket, lang }) {
   const languageLine = lang === 'en' ? '\n\n(Reminder: answer in English.)' : ''
   const userMsg = `SITUACIÓN: ${situation}
 
 Como ${director.name} (${director.title}), da tu opinión exprés en 2-3 frases desde tu especialidad. No es un análisis largo — solo tu primera reacción experta y directa, sin rodeos.${languageLine}`
-  return streamCompletion({ provider, apiKey, system: languageSystemDirective(lang) + director.systemPrompt, userMsg, maxTokens: 260, serverMode: 'premium' })
+  return streamCompletion({ provider, apiKey, system: languageSystemDirective(lang) + director.systemPrompt, userMsg, maxTokens: 260, serverMode: 'premium', analysisTicket: reportTicket })
 }
 
 // Encabezados exactos que también reconocen ReportModal.jsx (iconos, checklist, secciones)
@@ -91,6 +91,7 @@ export function useReport() {
     setError(null)
     setReport(null)
     try {
+      let reportTicket = ''
       // Sin API key propia, el informe lo paga el servidor: hay que gastar un crédito real
       // verificado en KV antes de llamar a ningún modelo. Con API key propia el usuario paga
       // su propia cuenta, así que no consume créditos comprados en esta app.
@@ -104,6 +105,9 @@ export function useReport() {
           const data = await gateRes.json().catch(() => ({}))
           throw new Error(data.code === 'NO_REPORT_CREDITS' ? t('gate.noReportCredits') : (data.error || t('gate.noReportCredits')))
         }
+        const gateData = await gateRes.json()
+        if (!gateData.ticket) throw new Error(t('gate.unavailable'))
+        reportTicket = gateData.ticket
       }
 
       const activeIds = new Set(activeDirectors.map(d => d.id))
@@ -111,7 +115,7 @@ export function useReport() {
 
       const quickResults = await Promise.all(missingDirectors.map(async (director) => {
         try {
-          const text = await quickTake({ director, situation, apiKey, provider, lang })
+          const text = await quickTake({ director, situation, apiKey, provider, reportTicket, lang })
           return { director, text }
         } catch {
           return { director, text: null }
@@ -144,7 +148,7 @@ Produce el informe siguiendo exactamente la estructura indicada.`
       // y cierre en prosa) con explicaciones de "por qué" y "qué consigues" en cada acción.
       // 5500 seguía cortando la despedida final a media frase en pruebas reales — 7500 le
       // da margen de sobra incluso en los casos más largos.
-      const text = await streamCompletion({ provider, apiKey, system: buildReportSystem(lang), userMsg: reportPrompt, maxTokens: 7500, serverMode: 'premium' })
+      const text = await streamCompletion({ provider, apiKey, system: buildReportSystem(lang), userMsg: reportPrompt, maxTokens: 7500, serverMode: 'premium', analysisTicket: reportTicket })
       setReport({ text, quickTakes })
     } catch (err) {
       setError(err.message || t('report.generationFailed'))

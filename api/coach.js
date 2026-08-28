@@ -1,5 +1,7 @@
 export const config = { runtime: 'edge' }
 
+import { consumeAnalysisTicket } from '../server/analysisTicket.js'
+
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000
 // El límite cuenta llamadas individuales, no sesiones. Un análisis completo hace ~14 llamadas
 // (8 directores + 1 veredicto + hasta 4 quickTakes de directores que no participaron + 1
@@ -8,7 +10,6 @@ const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000
 // hasta 10 mensajes de seguimiento al Chairman — 100 cubre ese caso real sin dejar el modo
 // gratuito prácticamente inútil ni bloquear a mitad de un análisis ya pagado.
 const RATE_LIMIT_MAX = 100
-const ipStore = new Map()
 
 function getIP(req) {
   return req.headers.get('cf-connecting-ip') ||
@@ -16,16 +17,14 @@ function getIP(req) {
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
 }
 
-function checkRate(ip) {
+async function checkRate(ip) {
   const now = Date.now()
-  const e = ipStore.get(ip)
-  if (!e || now - e.windowStart > RATE_LIMIT_WINDOW_MS) {
-    ipStore.set(ip, { count: 1, windowStart: now })
-    return { ok: true, remaining: RATE_LIMIT_MAX - 1, resetAt: now + RATE_LIMIT_WINDOW_MS }
-  }
-  if (e.count >= RATE_LIMIT_MAX) return { ok: false, remaining: 0, resetAt: e.windowStart + RATE_LIMIT_WINDOW_MS }
-  e.count++
-  return { ok: true, remaining: RATE_LIMIT_MAX - e.count, resetAt: e.windowStart + RATE_LIMIT_WINDOW_MS }
+  const bucket = Math.floor(now / RATE_LIMIT_WINDOW_MS)
+  const key = `coach_rate:${ip}:${bucket}`
+  const count = await kvCommand(`/incr/${encodeURIComponent(key)}`)
+  if (count === 1) await kvCommand(`/expire/${encodeURIComponent(key)}/${2 * 60 * 60}`)
+  const resetAt = (bucket + 1) * RATE_LIMIT_WINDOW_MS
+  return { ok: count <= RATE_LIMIT_MAX, remaining: Math.max(0, RATE_LIMIT_MAX - count), resetAt }
 }
 
 // El modo 'premium' (informe de pago + sus quick-takes) no puede confiarse a que el propio
@@ -54,23 +53,29 @@ async function hasPremiumAccess(ip) {
 }
 
 function cors(origin) {
-  const allowed = process.env.ALLOWED_ORIGIN || '*'
+  const configured = (process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || '')
+    .split(',').map(value => value.trim()).filter(Boolean)
+  const allowedOrigins = configured.length ? configured : [
+    'https://juntadirectiva.iapacks.com',
+    'https://juntadirectiva.vercel.app',
+  ]
   return {
-    'Access-Control-Allow-Origin': allowed === '*' ? '*' : (origin === allowed ? origin : ''),
+    'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : '',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Analysis-Ticket',
     'Access-Control-Expose-Headers': 'X-AI-Provider',
+    'Vary': 'Origin',
   }
 }
 
 // El tope de max_tokens ya lo decide el llamador (ver handler: distingue modo gratis de
 // premium) — estas funciones ya no lo recortan a un valor fijo por su cuenta.
-async function createClaudeStream({ apiKey, systemPrompt, userPrompt, maxTokens, attachments = [] }) {
+async function createClaudeStream({ apiKey, model, systemPrompt, userPrompt, maxTokens, attachments = [] }) {
   return fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model,
       max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: 'user', content: attachments.length ? [{ type: 'text', text: userPrompt }, ...attachments.filter(a => a?.kind === 'image' && /^image\//.test(a.mimeType || '') && a.data?.length < 12_000_000).map(a => ({ type: 'image', source: { type: 'base64', media_type: a.mimeType, data: a.data } }))] : userPrompt }],
@@ -100,18 +105,6 @@ export default async function handler(req) {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: c })
 
   const ip = getIP(req)
-  if (ipStore.size > 5000) {
-    const now = Date.now()
-    for (const [k, v] of ipStore) if (now - v.windowStart > RATE_LIMIT_WINDOW_MS) ipStore.delete(k)
-  }
-
-  const { ok, remaining, resetAt } = checkRate(ip)
-  if (!ok) {
-    const min = Math.ceil((resetAt - Date.now()) / 60000)
-    return new Response(JSON.stringify({ error: `Límite de uso gratuito alcanzado por esta hora. Vuelve en ${min} min.`, code: 'RATE_LIMITED', resetAt }), {
-      status: 429, headers: { ...c, 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil((resetAt - Date.now()) / 1000)) }
-    })
-  }
 
   let body
   try { body = await req.json() } catch { return new Response(JSON.stringify({ error: 'JSON inválido' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } }) }
@@ -125,6 +118,51 @@ export default async function handler(req) {
   const maxTokens = Math.min(body.maxTokens || 800, mode === 'premium' ? 7500 : 1200)
   if (!systemPrompt || !userPrompt) return new Response(JSON.stringify({ error: 'Faltan prompts' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (userPrompt.length > 12000 || systemPrompt.length > 8000) return new Response(JSON.stringify({ error: 'Prompt demasiado largo' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
+
+  // Cada análisis gratuito recibe un ticket firmado, ligado a su IP y con un presupuesto
+  // máximo de llamadas. Así /api/coach no puede usarse como proxy abierto saltándose el
+  // control de 2 análisis/día. Los clientes premium pueden usar el chat sin ticket.
+  if (mode === 'premium') {
+    const authorization = await consumeAnalysisTicket(req.headers.get('x-analysis-ticket') || '', ip)
+    if (!authorization.allowed || authorization.tier !== 'premium-report') {
+      const unavailable = authorization.code === 'ANALYSIS_AUTH_UNAVAILABLE'
+      return new Response(JSON.stringify({ error: unavailable ? 'El control de uso no está disponible. Inténtalo de nuevo en unos minutos.' : 'Este informe no tiene una autorización válida.', code: authorization.code || 'ANALYSIS_TICKET_INVALID' }), {
+        status: unavailable ? 503 : 401, headers: { ...c, 'Content-Type': 'application/json' }
+      })
+    }
+  } else {
+    const ticket = req.headers.get('x-analysis-ticket') || ''
+    if (ticket) {
+      const authorization = await consumeAnalysisTicket(ticket, ip)
+      if (!authorization.allowed) {
+        const unavailable = authorization.code === 'ANALYSIS_AUTH_UNAVAILABLE'
+        return new Response(JSON.stringify({ error: unavailable ? 'El control de uso no está disponible. Inténtalo de nuevo en unos minutos.' : 'Esta autorización de análisis no es válida o ya se agotó.', code: authorization.code }), {
+          status: unavailable ? 503 : 429, headers: { ...c, 'Content-Type': 'application/json' }
+        })
+      }
+    } else if (!(await hasPremiumAccess(ip))) {
+      return new Response(JSON.stringify({ error: 'Primero debes iniciar un análisis desde la aplicación.', code: 'ANALYSIS_TICKET_REQUIRED' }), {
+        status: 401, headers: { ...c, 'Content-Type': 'application/json' }
+      })
+    }
+  }
+
+  let rate
+  try {
+    rate = await checkRate(ip)
+  } catch (err) {
+    console.error('coach rate-limit KV error:', err)
+    return new Response(JSON.stringify({ error: 'El control de uso no está disponible. Inténtalo de nuevo en unos minutos.', code: 'ANALYSIS_AUTH_UNAVAILABLE' }), {
+      status: 503, headers: { ...c, 'Content-Type': 'application/json' }
+    })
+  }
+  const { ok, remaining, resetAt } = rate
+  if (!ok) {
+    const min = Math.ceil((resetAt - Date.now()) / 60000)
+    return new Response(JSON.stringify({ error: `Límite de uso alcanzado por esta hora. Vuelve en ${min} min.`, code: 'RATE_LIMITED', resetAt }), {
+      status: 429, headers: { ...c, 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil((resetAt - Date.now()) / 1000)) }
+    })
+  }
 
   // El navegador nunca trae su propia API key hasta aquí (aiClient.js llama directo al
   // proveedor en ese caso) — mode:'premium' sin haber pagado era el hueco real. Se exige
@@ -140,13 +178,14 @@ export default async function handler(req) {
   const useOpenAI = mode === 'free' && Boolean(process.env.OPENAI_API_KEY)
   let provider = useOpenAI ? 'openai' : 'claude'
   const apiKey = useOpenAI ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY
+  const claudeModel = mode === 'free' ? 'claude-haiku-4-5' : 'claude-sonnet-4-6'
   if (!apiKey) return new Response(JSON.stringify({ error: 'Servicio no configurado' }), { status: 503, headers: { ...c, 'Content-Type': 'application/json' } })
 
   let upstreamRes
   try {
     upstreamRes = useOpenAI
       ? await createOpenAIStream({ apiKey, systemPrompt, userPrompt, maxTokens, attachments })
-      : await createClaudeStream({ apiKey, systemPrompt, userPrompt, maxTokens, attachments })
+      : await createClaudeStream({ apiKey, model: claudeModel, systemPrompt, userPrompt, maxTokens, attachments })
   } catch {
     return new Response(JSON.stringify({ error: `Error conectando con ${useOpenAI ? 'OpenAI' : 'Anthropic'}` }), { status: 502, headers: { ...c, 'Content-Type': 'application/json' } })
   }
@@ -158,6 +197,7 @@ export default async function handler(req) {
     try {
       upstreamRes = await createClaudeStream({
         apiKey: process.env.ANTHROPIC_API_KEY,
+        model: 'claude-haiku-4-5',
         systemPrompt,
         userPrompt,
         maxTokens, attachments,

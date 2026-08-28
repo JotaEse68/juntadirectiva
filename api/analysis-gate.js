@@ -4,17 +4,26 @@
 // aquél sigue limitando llamadas/hora como red de seguridad contra abuso.
 export const config = { runtime: 'edge' }
 
+import { issueAnalysisTicket } from '../server/analysisTicket.js'
+
 const FREE_DAILY_LIMIT = 2
 const KEY_TTL_SECONDS = 26 * 60 * 60 // 26h: cubre el día completo con margen de zona horaria
 // Los créditos de informe (comprados, no diarios) no deben caducar en uso normal — 2 años
 // es solo higiene de KV para no acumular claves de sesiones abandonadas para siempre.
 const CREDIT_TTL_SECONDS = 2 * 365 * 24 * 60 * 60
 
-function cors() {
+function cors(origin = '') {
+  const configured = (process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || '')
+    .split(',').map(value => value.trim()).filter(Boolean)
+  const allowedOrigins = configured.length ? configured : [
+    'https://juntadirectiva.iapacks.com',
+    'https://juntadirectiva.vercel.app',
+  ]
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : '',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Vary': 'Origin',
   }
 }
 
@@ -62,20 +71,14 @@ async function checkAndConsume(ip) {
   // con GET+INCR en dos round trips separados, peticiones concurrentes de la misma IP pueden
   // leer todas el mismo "aún no al límite" y colarse todas — con INCR como único paso de
   // comprobación no hay ventana entre leer y escribir.
-  try {
-    const used = await kvIncr(freeKey)
-    if (used === 1) await kvExpire(freeKey, KEY_TTL_SECONDS)
-    if (used <= FREE_DAILY_LIMIT) return { allowed: true, tier: 'free' }
+  const used = await kvIncr(freeKey)
+  if (used === 1) await kvExpire(freeKey, KEY_TTL_SECONDS)
+  if (used <= FREE_DAILY_LIMIT) return { allowed: true, tier: 'free' }
 
-    const extraLeft = await kvDecr(extraKey)
-    if (extraLeft >= 0) return { allowed: true, tier: 'extra' }
-    await kvIncr(extraKey) // no había extra disponible: deshace el decremento para no dejar el contador negativo
-    return { allowed: false }
-  } catch (err) {
-    console.error('analysis-gate KV error:', err)
-    // KV caído: no bloqueamos el uso gratuito por un problema de infraestructura.
-    return { allowed: true, tier: 'free', degraded: true }
-  }
+  const extraLeft = await kvDecr(extraKey)
+  if (extraLeft >= 0) return { allowed: true, tier: 'extra' }
+  await kvIncr(extraKey) // no había extra disponible: deshace el decremento para no dejar el contador negativo
+  return { allowed: false }
 }
 
 async function grantExtra(ip, sessionId) {
@@ -165,7 +168,7 @@ async function consumeReportCredit(ip) {
 }
 
 export default async function handler(req) {
-  const c = cors()
+  const c = cors(req.headers.get('origin') || '')
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: c })
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: c })
 
@@ -177,13 +180,29 @@ export default async function handler(req) {
   const ip = getIP(req)
 
   if (body.action === 'check') {
-    const result = await checkAndConsume(ip)
+    let result
+    try {
+      result = await checkAndConsume(ip)
+    } catch (err) {
+      console.error('analysis-gate KV error:', err)
+      return new Response(JSON.stringify({ allowed: false, code: 'ANALYSIS_AUTH_UNAVAILABLE', error: 'El control de uso no está disponible. Inténtalo de nuevo en unos minutos.' }), {
+        status: 503, headers: { ...c, 'Content-Type': 'application/json' }
+      })
+    }
     if (!result.allowed) {
       return new Response(JSON.stringify({ allowed: false, code: 'NO_FREE_ANALYSES', error: 'Sin análisis gratis hoy. Compra análisis extra para seguir analizando.' }), {
         status: 429, headers: { ...c, 'Content-Type': 'application/json' }
       })
     }
-    return new Response(JSON.stringify(result), { status: 200, headers: { ...c, 'Content-Type': 'application/json' } })
+    try {
+      const ticket = await issueAnalysisTicket(ip, result.tier)
+      return new Response(JSON.stringify({ ...result, ticket }), { status: 200, headers: { ...c, 'Content-Type': 'application/json' } })
+    } catch (err) {
+      console.error('analysis ticket issue error:', err)
+      return new Response(JSON.stringify({ allowed: false, code: 'ANALYSIS_AUTH_UNAVAILABLE', error: 'No se pudo autorizar el análisis. Inténtalo de nuevo en unos minutos.' }), {
+        status: 503, headers: { ...c, 'Content-Type': 'application/json' }
+      })
+    }
   }
 
   if (body.action === 'grant-extra') {
@@ -207,13 +226,21 @@ export default async function handler(req) {
   }
 
   if (body.action === 'consume-report') {
-    const result = await consumeReportCredit(ip)
-    if (!result.allowed) {
-      return new Response(JSON.stringify({ allowed: false, code: 'NO_REPORT_CREDITS', error: 'No tienes créditos de informe disponibles.' }), {
-        status: 402, headers: { ...c, 'Content-Type': 'application/json' }
+    try {
+      const result = await consumeReportCredit(ip)
+      if (!result.allowed) {
+        return new Response(JSON.stringify({ allowed: false, code: 'NO_REPORT_CREDITS', error: 'No tienes créditos de informe disponibles.' }), {
+          status: 402, headers: { ...c, 'Content-Type': 'application/json' }
+        })
+      }
+      const ticket = await issueAnalysisTicket(ip, 'premium-report', 16)
+      return new Response(JSON.stringify({ ...result, ticket }), { status: 200, headers: { ...c, 'Content-Type': 'application/json' } })
+    } catch (err) {
+      console.error('report authorization error:', err)
+      return new Response(JSON.stringify({ allowed: false, code: 'ANALYSIS_AUTH_UNAVAILABLE', error: 'No se pudo autorizar el informe. Inténtalo de nuevo en unos minutos.' }), {
+        status: 503, headers: { ...c, 'Content-Type': 'application/json' }
       })
     }
-    return new Response(JSON.stringify(result), { status: 200, headers: { ...c, 'Content-Type': 'application/json' } })
   }
 
   return new Response(JSON.stringify({ error: 'Acción no soportada' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })

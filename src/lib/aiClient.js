@@ -43,10 +43,17 @@ function extractDelta(provider, parsed) {
 
 // Llamada genérica con streaming. Sin API propia el servidor elige el modelo según el modo:
 // GPT-4o mini para análisis gratis y Claude Sonnet para el plan premium.
-export async function streamCompletion({ provider, apiKey, system, userMsg, maxTokens, onChunk, serverMode = 'free', attachments = [] }) {
+export async function streamCompletion({ provider, apiKey, system, userMsg, maxTokens, onChunk, serverMode = 'free', attachments = [], analysisTicket = '' }) {
   const req = apiKey
     ? buildRequest({ provider, apiKey, system, userMsg, maxTokens, attachments })
-    : { endpoint: '/api/coach', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemPrompt: system, userPrompt: userMsg, maxTokens, mode: serverMode, attachments }) }
+    : {
+        endpoint: '/api/coach',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(analysisTicket ? { 'X-Analysis-Ticket': analysisTicket } : {}),
+        },
+        body: JSON.stringify({ systemPrompt: system, userPrompt: userMsg, maxTokens, mode: serverMode, attachments }),
+      }
 
   const res = await fetch(req.endpoint, { method: 'POST', headers: req.headers, body: req.body })
   if (!res.ok) {

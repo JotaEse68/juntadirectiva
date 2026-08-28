@@ -125,6 +125,7 @@ function AppInner() {
   const [showPrivateAccess, setShowPrivateAccess] = useState(() => window.location.pathname === '/acceso-privado')
 
   const { conveneBoard, reset, retry, clearHistory, restoredSession, pause, resume, directorStates, verdict, verdictLoading, phase, activeDirectors, globalError, isPaused } = useBoard()
+  const [analysisTicket, setAnalysisTicket] = useState(() => restoredSession?.analysisTicket || '')
   const { items: ctxItems, addNote, processFile, processURL, removeItem: removeCtxItem,
           buildContextBlock, buildSituationBrief, hasContext, isProcessing: ctxProcessing } = useContextBuilder()
   const { report, loading: reportLoading, error: reportError, generateReport, reset: resetReport } = useReport()
@@ -152,6 +153,7 @@ function AppInner() {
     setSituation(restoredSession.situation)
     setMeetingType(restoredSession.meetingType || 'decision')
     if (restoredSession.directors?.length) setSelectedIds(restoredSession.directors.map(d => d.id))
+    setAnalysisTicket(restoredSession.analysisTicket || '')
   }, [restoredSession])
 
   useEffect(() => {
@@ -317,7 +319,7 @@ function AppInner() {
   }
 
   const handleSendChat = (text, attachments = []) => {
-    sendChatMessage(text, attachments, { situation, activeDirectors, directorStates, verdict }, { apiKey: apiKey || null, provider: apiProvider })
+    sendChatMessage(text, attachments, { situation, activeDirectors, directorStates, verdict }, { apiKey: apiKey || null, provider: apiProvider, analysisTicket })
   }
 
   const toggleDirector = (id) => {
@@ -341,6 +343,7 @@ function AppInner() {
     const contextBrief = buildSituationBrief()
     if ((!writtenSituation && !contextBrief) || !isIdle || selectedIds.length === 0) return
     setGateError(null)
+    let ticket = ''
 
     if (!apiKey) {
       setGateChecking(true)
@@ -352,20 +355,26 @@ function AppInner() {
         })
         const data = await res.json()
         setGateChecking(false)
-        if (!res.ok || !data.allowed) {
+        if (!res.ok || !data.allowed || !data.ticket) {
           setGateError(localizeApiError(data, 'gate.noFreeToday'))
           return
         }
+        ticket = data.ticket
+        setAnalysisTicket(ticket)
       } catch {
         setGateChecking(false)
+        setGateError(t('gate.unavailable'))
+        return
       }
+    } else {
+      setAnalysisTicket('')
     }
 
     const directors = orderForDebate(selectedIds, DIRECTORS)
     const baseSituation = writtenSituation || `Analiza el proyecto descrito en los documentos y fuentes de apoyo.\n\n${contextBrief}`
     const profileLine = buildProfileLine(profile)
     const effectiveSituation = profileLine ? `${profileLine}\n\n${baseSituation}` : baseSituation
-    await conveneBoard({ directors, situation: effectiveSituation, meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider, mode: boardMode })
+    await conveneBoard({ directors, situation: effectiveSituation, meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider, analysisTicket: ticket, mode: boardMode })
   }, [situation, meetingType, selectedIds, apiKey, apiProvider, boardMode, isIdle, conveneBoard, buildContextBlock, buildSituationBrief, profile])
 
   const handleBuyExtra = async () => {
@@ -394,7 +403,7 @@ function AppInner() {
 
   const handleReset = () => {
     reset(); resetReport(); resetChat(); setShowReport(false); setSituation('')
-    setGateError(null); setProfile({ structure: null, budget: null, hours: null })
+    setGateError(null); setAnalysisTicket(''); setProfile({ structure: null, budget: null, hours: null })
   }
   const handleSaveKey = (provider, key) => {
     localStorage.setItem(STORAGE_KEY, key)
@@ -404,7 +413,7 @@ function AppInner() {
   }
   const handleDeleteSession = () => {
     clearHistory(); resetReport(); resetChat(); setShowReport(false); setSituation(''); setGateError(null)
-    setProfile({ structure: null, budget: null, hours: null })
+    setAnalysisTicket(''); setProfile({ structure: null, budget: null, hours: null })
   }
   const handlePrivateGranted = () => {
     setPrivateAccess(true)

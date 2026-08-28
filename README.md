@@ -33,10 +33,12 @@ Precio actual: 4,99 € por plan o 9,99 € por tres planes. Es pago único, sin
 
 ## Modelos y proveedores
 
-- El análisis gratuito y el resumen de documentos usan `gpt-4o-mini` cuando `OPENAI_API_KEY` tiene crédito disponible; si OpenAI falla o no tiene saldo, se sigue con Claude como respaldo automático (tanto en el debate como en el resumen de contexto) para no romper la aplicación.
+- El análisis gratuito y el resumen de documentos usan `gpt-4o-mini` cuando `OPENAI_API_KEY` tiene crédito disponible; si OpenAI falla o no tiene saldo, se usa `claude-haiku-4-5` como respaldo económico automático. Los informes premium mantienen `claude-sonnet-4-6` para no rebajar calidad.
 - El informe de pago usa Claude Sonnet.
 
 Nunca se exponen claves del servidor en el navegador ni en GitHub. Los clientes no pueden traer su propia API key — esa opción existe solo para uso interno, ver "Ajustes privados" más abajo.
+
+El modo gratuito no confía solo en la interfaz: `api/analysis-gate.js` emite un ticket firmado, ligado a la IP y con un presupuesto máximo de llamadas; `api/coach.js` lo valida y descuenta cada uso en KV. Los límites del coach y del resumen de documentos también viven en KV y fallan cerrados si ese control no está disponible.
 
 ## Variables de entorno en Vercel
 

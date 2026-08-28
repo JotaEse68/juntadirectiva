@@ -37,7 +37,7 @@ export function useChairmanChat() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
 
-  const sendMessage = useCallback(async (text, attachments = [], sessionContext, { apiKey, provider }) => {
+  const sendMessage = useCallback(async (text, attachments = [], sessionContext, { apiKey, provider, analysisTicket }) => {
     const question = text.trim()
     if (!question) return
 
@@ -56,6 +56,7 @@ export function useChairmanChat() {
 
       const reply = await streamCompletion({
         provider, apiKey, system, userMsg: userMsg + attachmentContext + languageLine, maxTokens: 700, attachments,
+        analysisTicket,
         onChunk: (partial) => {
           setMessages(prev => {
             const next = prev.slice()

@@ -41,7 +41,7 @@ function buildDebateRecap(debateSoFar) {
   return `\n\nDEBATE HASTA AHORA (tus colegas ya hablaron, en este orden):\n${turns}\n\nAntes de dar tu propio análisis, reacciona en 1-2 frases a lo que han dicho tus colegas — cita a quien corresponda por nombre, coincide o discrepa explícitamente. Luego da tu aportación completa desde tu especialidad.`
 }
 
-async function callDirector({ director, situation, meetingType, contextBlock, debateSoFar, apiKey, provider, onChunk, lang }) {
+async function callDirector({ director, situation, meetingType, contextBlock, debateSoFar, apiKey, provider, analysisTicket, onChunk, lang }) {
   const meetingLabel = MEETING_TYPES.find(m => m.id === meetingType)?.label || 'Reunión'
   const framing = MEETING_FRAMING[meetingType] || ''
 
@@ -55,20 +55,20 @@ ${situation}${contextSection}${debateSection}
 
 Como ${director.name} (${director.title}), da tu análisis experto y posición. Si el contexto adicional es relevante para tu especialidad, incorpóralo en tu análisis. Nunca te niegues a opinar alegando que no puedes acceder a una URL o navegar por internet — todo el contexto relevante ya está resuelto y resumido arriba; si algo no está cubierto ahí, trabaja igual con lo que sí tienes.${languageDirective(lang)}`
 
-  return streamCompletion({ provider, apiKey, system: languageSystemDirective(lang) + director.systemPrompt, userMsg, maxTokens: 800, onChunk })
+  return streamCompletion({ provider, apiKey, system: languageSystemDirective(lang) + director.systemPrompt, userMsg, maxTokens: 800, analysisTicket, onChunk })
 }
 
 // Llama al Chairman para el veredicto final basado en todos los análisis
-async function callContrast({ situation, responses, apiKey, provider, lang }) {
+async function callContrast({ situation, responses, apiKey, provider, analysisTicket, lang }) {
   const summaries = responses.map(r => `${r.director.name}: ${excerpt(r.text, 500)}`).join('\n\n')
   return streamCompletion({
-    provider, apiKey, maxTokens: 350,
+    provider, apiKey, analysisTicket, maxTokens: 350,
     system: languageSystemDirective(lang) + 'Eres el moderador de una junta directiva que asesora a un autoempleado o microempresa sin departamentos ni presupuesto de cinco cifras. Contrasta las perspectivas recibidas: identifica dos acuerdos, una tensión real y qué evidencia decidiría entre alternativas. Sé concreto y no inventes datos del negocio del usuario.',
     userMsg: `SITUACIÓN:\n${situation}\n\nPERSPECTIVAS INICIALES:\n${summaries}${languageDirective(lang)}`,
   })
 }
 
-async function callVerdict({ situation, meetingType, contextBlock, responses, contrast = '', apiKey, provider, lang }) {
+async function callVerdict({ situation, meetingType, contextBlock, responses, contrast = '', apiKey, provider, analysisTicket, lang }) {
   const summaries = responses
     .map(r => `${r.director.name} (${r.director.title}):\n${r.text}`)
     .join('\n\n---\n\n')
@@ -96,7 +96,7 @@ ${contrast ? `RONDA DE CONTRASTE:\n${contrast}\n` : ''}
 
 Sintetiza el debate y emite el veredicto final de la junta.${languageDirective(lang)}`
 
-  return streamCompletion({ provider, apiKey, system: verdictSystem, userMsg: verdictMsg, maxTokens: 600 })
+  return streamCompletion({ provider, apiKey, system: verdictSystem, userMsg: verdictMsg, maxTokens: 600, analysisTicket })
 }
 
 export function useBoard() {
@@ -145,8 +145,8 @@ export function useBoard() {
   }, [])
 
   // `directors` viene ya resuelto y ordenado desde fuera (selección automática + overrides del usuario)
-  const conveneBoard = useCallback(async ({ directors, situation, meetingType, contextBlock, apiKey, provider, mode = 'fast' }) => {
-    lastRequestRef.current = { directors, situation, meetingType, contextBlock, apiKey, provider, mode }
+  const conveneBoard = useCallback(async ({ directors, situation, meetingType, contextBlock, apiKey, provider, analysisTicket, mode = 'fast' }) => {
+    lastRequestRef.current = { directors, situation, meetingType, contextBlock, apiKey, provider, analysisTicket, mode }
     const selected = directors
     setActiveDirectors(selected)
     setDirectorStates({})
@@ -176,6 +176,7 @@ export function useBoard() {
           debateSoFar,
           apiKey: apiKey || null,
           provider: provider || 'claude',
+          analysisTicket,
           lang,
           onChunk: (partial) => {
             setDirectorStates(prev => ({
@@ -222,7 +223,7 @@ export function useBoard() {
     let contrast = ''
     if (mode === 'fast' && successful.length > 1) {
       setPhase('contrasting')
-      try { contrast = await callContrast({ situation, responses: successful, apiKey: apiKey || null, provider: provider || 'claude', lang }) } catch { /* el Chairman puede sintetizar sin esta ronda */ }
+      try { contrast = await callContrast({ situation, responses: successful, apiKey: apiKey || null, provider: provider || 'claude', analysisTicket, lang }) } catch { /* el Chairman puede sintetizar sin esta ronda */ }
     }
 
     // Veredicto del Chairman
@@ -237,6 +238,7 @@ export function useBoard() {
         contrast,
         apiKey: apiKey || null,
         provider: provider || 'claude',
+        analysisTicket,
         lang,
       })
       setVerdict(verdictText)

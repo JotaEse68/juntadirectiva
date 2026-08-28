@@ -1,9 +1,8 @@
 // Edge Function: raspa URLs y resume contexto con Claude
 export const config = { runtime: 'edge' }
 
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000
-const RATE_LIMIT_MAX = 10
-const ipStore = new Map()
+const CONTEXT_DAILY_LIMIT = 6
+const LIMIT_TTL_SECONDS = 26 * 60 * 60
 
 function getIP(req) {
   return req.headers.get('cf-connecting-ip') ||
@@ -11,23 +10,36 @@ function getIP(req) {
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
 }
 
-function checkRate(ip) {
-  const now = Date.now()
-  const e = ipStore.get(ip)
-  if (!e || now - e.windowStart > RATE_LIMIT_WINDOW_MS) {
-    ipStore.set(ip, { count: 1, windowStart: now })
-    return { ok: true }
-  }
-  if (e.count >= RATE_LIMIT_MAX) return { ok: false }
-  e.count++
-  return { ok: true }
+async function kvCommand(path) {
+  const base = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN
+  if (!base || !token) throw new Error('KV no configurado')
+  const res = await fetch(`${base}${path}`, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) throw new Error(`KV error ${res.status}`)
+  const data = await res.json()
+  return data.result
+}
+
+async function checkRate(ip) {
+  const day = new Date().toISOString().slice(0, 10)
+  const key = `context:${ip}:${day}`
+  const count = await kvCommand(`/incr/${encodeURIComponent(key)}`)
+  if (count === 1) await kvCommand(`/expire/${encodeURIComponent(key)}/${LIMIT_TTL_SECONDS}`)
+  return { ok: count <= CONTEXT_DAILY_LIMIT }
 }
 
 function cors(origin) {
+  const configured = (process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || '')
+    .split(',').map(value => value.trim()).filter(Boolean)
+  const allowedOrigins = configured.length ? configured : [
+    'https://juntadirectiva.iapacks.com',
+    'https://juntadirectiva.vercel.app',
+  ]
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : '',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Vary': 'Origin',
   }
 }
 
@@ -120,7 +132,7 @@ async function summarizeClaude(userPrompt, apiKey, lang) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-haiku-4-5',
       max_tokens: 600,
       system: summarySystemPrompt(lang),
       messages: [{ role: 'user', content: userPrompt }],
@@ -191,14 +203,6 @@ export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: c })
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: c })
 
-  const ip = getIP(req)
-  const { ok } = checkRate(ip)
-  // El idioma llega en el body, así que aún no lo tenemos si falla el rate limit — se usa el
-  // valor por defecto (es) solo para este caso límite, no afecta al resto de la respuesta.
-  if (!ok) return new Response(JSON.stringify({ error: msg().rateLimited }), {
-    status: 429, headers: { ...c, 'Content-Type': 'application/json' }
-  })
-
   let body
   try { body = await req.json() } catch {
     return new Response(JSON.stringify({ error: msg().invalidJson }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
@@ -206,6 +210,22 @@ export default async function handler(req) {
 
   const { type, content, url, clientApiKey, lang } = body
   const m = msg(lang)
+  const ip = getIP(req)
+  // Las claves propias no generan gasto para el servidor. El modo gratuito sí queda
+  // limitado en KV para que reiniciar o repartir funciones Edge no reinicie el contador.
+  if (!clientApiKey) {
+    try {
+      const { ok } = await checkRate(ip)
+      if (!ok) return new Response(JSON.stringify({ error: m.rateLimited }), {
+        status: 429, headers: { ...c, 'Content-Type': 'application/json' }
+      })
+    } catch (err) {
+      console.error('context rate-limit KV error:', err)
+      return new Response(JSON.stringify({ error: m.rateLimited, code: 'ANALYSIS_AUTH_UNAVAILABLE' }), {
+        status: 503, headers: { ...c, 'Content-Type': 'application/json' }
+      })
+    }
+  }
   // El PDF/documento forma parte del análisis gratuito: usa GPT-4o mini cuando existe la
   // clave del servidor. Claude queda como fallback para no interrumpir el servicio.
   const provider = clientApiKey
