@@ -822,7 +822,7 @@ function AppInner() {
 
         <footer className="site-footer" aria-label={t('footer.siteInfo')}>
           <div className="site-footer__topline"><div><p className="site-footer__product">{t('footer.product')}</p><p className="site-footer__tagline">{t('footer.tagline')}</p></div><nav className="site-footer__links" aria-label={t('footer.linksLabel')}><a href="https://jsantos.pro/" target="_blank" rel="noreferrer">Jota Santos</a><a href="https://iapacks.com/" target="_blank" rel="noreferrer">IA Packs</a></nav></div>
-          <details className="site-footer__legal"><summary>{t('footer.disclaimerSummary')}</summary><div className="site-footer__legal-copy"><p><strong>{t('footer.disclaimerLabel')}</strong> {t('footer.disclaimer')}</p><p><strong>{t('footer.useLabel')}</strong> {t('footer.use')}</p><p><strong>{t('footer.rightsLabel')}</strong> {t('footer.rights')}</p></div></details>
+          <details className="site-footer__legal"><summary>{t('footer.disclaimerSummary')}</summary><div className="site-footer__legal-copy"><p><strong>{t('footer.disclaimerLabel')}</strong> {t('footer.disclaimer')}</p><p><strong>{t('footer.useLabel')}</strong> {t('footer.use')}</p><p><strong>{t('footer.privacyLabel')}</strong> {t('footer.privacy')}</p><p><strong>{t('footer.cookiesLabel')}</strong> {t('footer.cookies')}</p><p><strong>{t('footer.termsLabel')}</strong> {t('footer.terms')}</p><p><strong>{t('footer.rightsLabel')}</strong> {t('footer.rights')}</p></div></details>
         </footer>
       </main>
 
