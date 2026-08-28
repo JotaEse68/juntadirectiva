@@ -1,4 +1,5 @@
 import { PROVIDERS } from './providers.js'
+import { authorizedFetch } from './supabaseClient.js'
 
 // Arma la petición según el proveedor. Claude permite llamada directa desde el navegador;
 // OpenAI y Gemini bloquean CORS, así que se reenvían por nuestro propio proxy (/api/openai, /api/gemini)
@@ -55,7 +56,8 @@ export async function streamCompletion({ provider, apiKey, system, userMsg, maxT
         body: JSON.stringify({ systemPrompt: system, userPrompt: userMsg, maxTokens, mode: serverMode, attachments }),
       }
 
-  const res = await fetch(req.endpoint, { method: 'POST', headers: req.headers, body: req.body })
+  const requestOptions = { method: 'POST', headers: req.headers, body: req.body }
+  const res = apiKey ? await fetch(req.endpoint, requestOptions) : await authorizedFetch(req.endpoint, requestOptions)
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
     // code/resetAt viajan en el propio error para que quien llama pueda traducir el mensaje

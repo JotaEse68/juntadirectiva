@@ -10,7 +10,7 @@ Aplicación web para contrastar decisiones con una junta de 12 especialistas y o
 - Veredicto ejecutivo, consensos (barra de "convicción" por director), riesgo principal y próximos pasos.
 - Perfil rápido opcional (estructura/presupuesto/disponibilidad) para que los directores ajusten sus consejos sin tener que preguntarlo en el debate.
 - Análisis a partir de texto, PDF, Word, Markdown, URL o nota.
-- Dos análisis diarios usando la infraestructura de la aplicación. Al agotarlos, se pueden comprar 3 análisis extra por 2,99 € (pago único, no acumulable con el plan de acción).
+- Dos análisis diarios usando la infraestructura de la aplicación. El acceso se hace con enlace mágico por correo; los límites pertenecen a la cuenta y tienen IP/dispositivo como protección secundaria. Al agotarlos, se pueden comprar 3 análisis extra por 2,99 € (pago único, no acumulable con el plan de acción).
 - Chat de seguimiento con el Chairman tras el veredicto (10 mensajes gratis por sesión).
 
 ### Plan de acción de pago
@@ -38,7 +38,7 @@ Precio actual: 4,99 € por plan o 9,99 € por tres planes. Es pago único, sin
 
 Nunca se exponen claves del servidor en el navegador ni en GitHub. Los clientes no pueden traer su propia API key — esa opción existe solo para uso interno, ver "Ajustes privados" más abajo.
 
-El modo gratuito no confía solo en la interfaz: `api/analysis-gate.js` emite un ticket firmado, ligado a la IP y con un presupuesto máximo de llamadas; `api/coach.js` lo valida y descuenta cada uso en KV. Los límites del coach y del resumen de documentos también viven en KV y fallan cerrados si ese control no está disponible.
+El modo gratuito no confía solo en la interfaz: `api/analysis-gate.js` exige una sesión Supabase y emite un ticket firmado, ligado al usuario y con un presupuesto máximo de llamadas. Los límites diarios de cuenta, IP y dispositivo, los créditos y el historial viven en Supabase; KV mantiene el límite horario de llamadas. Los pagos se acreditan desde el webhook de Stripe con `stripe_session_id` único.
 
 ## Variables de entorno en Vercel
 
@@ -47,6 +47,13 @@ Configurar para Production y Preview:
 ```text
 OPENAI_API_KEY
 ANTHROPIC_API_KEY
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_ANON_KEY
+STRIPE_WEBHOOK_SECRET
+APP_URL
+DEVICE_COOKIE_SECRET
+TURNSTILE_SECRET_KEY
 STRIPE_SECRET_KEY
 KV_URL
 KV_REST_API_URL
@@ -56,6 +63,10 @@ REDIS_URL
 PRIVATE_ACCESS_CODE_HASH
 PRIVATE_ACCESS_COOKIE_SECRET
 ```
+
+Variables públicas de Vercel (Production y Preview): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` y, si se activa el captcha, `VITE_TURNSTILE_SITE_KEY`.
+
+La migración `supabase/migrations/20260828_auth_credits_and_reports.sql` crea las tablas, RLS, trigger de perfiles y funciones transaccionales. En Supabase Auth hay que activar Email/Magic Link y añadir `https://juntadirectiva.iapacks.com` y `https://juntadirectiva.vercel.app` como redirect URLs. En Stripe hay que registrar `/api/stripe-webhook` para `checkout.session.completed` y `checkout.session.async_payment_succeeded`.
 
 `OPENAI_API_KEY` requiere saldo activo para que GPT-4o mini atienda el modo gratuito.
 

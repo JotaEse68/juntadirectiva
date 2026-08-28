@@ -30,7 +30,7 @@ globalThis.fetch = async url => {
   return new Response('unsupported', { status: 400 })
 }
 
-test('ticket is bound to its IP and rejects tampering', async () => {
+test('ticket is bound to its user and rejects tampering', async () => {
   counters.clear()
   const ticket = await issueAnalysisTicket('203.0.113.10')
   assert.equal((await consumeAnalysisTicket(ticket, '203.0.113.10')).allowed, true)
@@ -51,10 +51,12 @@ test('ticket enforces its persistent call budget', async () => {
   assert.equal(exhausted.code, 'ANALYSIS_TICKET_EXHAUSTED')
 })
 
-test('premium report ticket carries a smaller signed budget', async () => {
+test('premium report ticket carries a smaller signed budget and reservation', async () => {
   counters.clear()
-  const ticket = await issueAnalysisTicket('192.0.2.9', 'premium-report', 2)
-  assert.equal((await consumeAnalysisTicket(ticket, '192.0.2.9')).tier, 'premium-report')
-  assert.equal((await consumeAnalysisTicket(ticket, '192.0.2.9')).allowed, true)
-  assert.equal((await consumeAnalysisTicket(ticket, '192.0.2.9')).code, 'ANALYSIS_TICKET_EXHAUSTED')
+  const ticket = await issueAnalysisTicket('user-9', 'premium-report', 2, { reservationId: 'reservation-1' })
+  const first = await consumeAnalysisTicket(ticket, 'user-9')
+  assert.equal(first.tier, 'premium-report')
+  assert.equal(first.reservationId, 'reservation-1')
+  assert.equal((await consumeAnalysisTicket(ticket, 'user-9')).allowed, true)
+  assert.equal((await consumeAnalysisTicket(ticket, 'user-9')).code, 'ANALYSIS_TICKET_EXHAUSTED')
 })

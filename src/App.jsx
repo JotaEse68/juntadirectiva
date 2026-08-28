@@ -9,25 +9,28 @@ import ReportModal from './components/ReportModal.jsx'
 import ChairmanChat from './components/ChairmanChat.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import PrivateAccessModal from './components/PrivateAccessModal.jsx'
+import AuthModal from './components/AuthModal.jsx'
+import AccountModal from './components/AccountModal.jsx'
 import { useBoard } from './hooks/useBoard.js'
 import { useContextBuilder } from './hooks/useContext.js'
 import { useReport } from './hooks/useReport.js'
 import { useChairmanChat } from './hooks/useChairmanChat.js'
+import { useAccount } from './hooks/useAccount.js'
 import ContextPanel from './components/ContextPanel.jsx'
 import { DIRECTORS, MEETING_TYPES, selectDirectorsForMeeting, orderForDebate } from './lib/directors.js'
 import { computeConsensus, findConvictionLine } from './lib/consensus.js'
 import { I18nProvider, useI18n } from './lib/i18n.js'
+import { authorizedFetch } from './lib/supabaseClient.js'
 
 const STORAGE_KEY = 'junta_api_key'
 const STORAGE_PROVIDER_KEY = 'junta_api_provider'
-const CREDITS_KEY = 'junta_report_credits'
 const MAX_CHARS = 2000
-const PREMIUM_ACCESS_KEY = 'junta_premium_access'
 // Claves de sessionStorage para sobrevivir la navegación completa de página que hace el
 // redirect a Stripe Checkout — todo el estado de React se pierde en ese salto, así que lo
 // que haga falta para retomar la sesión al volver se guarda aquí justo antes de redirigir.
 const PENDING_REPORT_KEY = 'junta_pending_report_context'
 const PENDING_SITUATION_KEY = 'junta_pending_situation'
+const PENDING_AUTH_KEY = 'junta_pending_after_auth'
 
 // Etiquetas del "perfil rápido" para el texto que se inyecta en `situation` — siempre en
 // español, igual que el resto del contexto que leen los directores (el idioma solo afecta
@@ -109,6 +112,7 @@ const ERROR_CODE_KEYS = {
 
 function AppInner() {
   const { lang, setLang, t } = useI18n()
+  const auth = useAccount()
   const localizeApiError = (data, fallbackKey) => {
     const codeKey = ERROR_CODE_KEYS[data?.code]
     return codeKey ? t(codeKey) : (data?.error || t(fallbackKey))
@@ -123,24 +127,49 @@ function AppInner() {
   const [selectedDirector, setSelectedDirector] = useState(null)
   const [privateAccess, setPrivateAccess] = useState(false)
   const [showPrivateAccess, setShowPrivateAccess] = useState(() => window.location.pathname === '/acceso-privado')
+  const [showAuth, setShowAuth] = useState(false)
+  const [showAccount, setShowAccount] = useState(false)
+  const [resumeAfterAuth, setResumeAfterAuth] = useState(false)
 
   const { conveneBoard, reset, retry, clearHistory, restoredSession, pause, resume, directorStates, verdict, verdictLoading, phase, activeDirectors, globalError, isPaused } = useBoard()
   const [analysisTicket, setAnalysisTicket] = useState(() => restoredSession?.analysisTicket || '')
   const { items: ctxItems, addNote, processFile, processURL, removeItem: removeCtxItem,
           buildContextBlock, buildSituationBrief, hasContext, isProcessing: ctxProcessing } = useContextBuilder()
-  const { report, loading: reportLoading, error: reportError, generateReport, reset: resetReport } = useReport()
+  const { report, loading: reportLoading, error: reportError, generateReport, reset: resetReport, restore: restoreReport } = useReport()
   const [showReport, setShowReport] = useState(false)
   const { messages: chatMessages, sending: chatSending, error: chatError, freeMessagesUsed, sendMessage: sendChatMessage, reset: resetChat } = useChairmanChat()
 
-  const [reportCredits, setReportCredits] = useState(() => Number(localStorage.getItem(CREDITS_KEY) || 0))
   const [buyingReport, setBuyingReport] = useState(false)
   const [checkoutError, setCheckoutError] = useState(null)
   const [gateError, setGateError] = useState(null)
   const [gateChecking, setGateChecking] = useState(false)
   const [buyingExtra, setBuyingExtra] = useState(false)
   const [boardMode, setBoardMode] = useState('fast')
-  const [premiumAccess, setPremiumAccess] = useState(() => localStorage.getItem(PREMIUM_ACCESS_KEY) === 'true')
   const [online, setOnline] = useState(() => navigator.onLine)
+
+  const reportCredits = auth.account?.profile?.report_credits || 0
+  const premiumAccess = Boolean(auth.account?.profile?.premium_access)
+  const refreshAccount = auth.refreshAccount
+
+  useEffect(() => {
+    if (!auth.user) return
+    try {
+      const raw = localStorage.getItem(PENDING_AUTH_KEY)
+      if (!raw) return
+      const pending = JSON.parse(raw)
+      if (Date.now() - pending.savedAt > 24 * 60 * 60 * 1000) {
+        localStorage.removeItem(PENDING_AUTH_KEY)
+        return
+      }
+      setSituation(pending.situation || '')
+      setMeetingType(pending.meetingType || 'decision')
+      if (pending.selectedIds?.length) setSelectedIds(pending.selectedIds)
+      if (pending.profile) setProfile(pending.profile)
+      if (pending.lang) setLang(pending.lang)
+      setResumeAfterAuth(true)
+      setShowAuth(false)
+    } catch { localStorage.removeItem(PENDING_AUTH_KEY) }
+  }, [auth.user, setLang])
 
   useEffect(() => {
     const update = () => setOnline(navigator.onLine)
@@ -168,109 +197,49 @@ function AppInner() {
     }).catch(() => {})
   }, [showPrivateAccess])
 
-  const addReportCredits = useCallback((n) => {
-    setReportCredits(prev => {
-      const next = prev + n
-      localStorage.setItem(CREDITS_KEY, String(next))
-      return next
-    })
-  }, [])
-
-  // Al volver de Stripe Checkout, confirma el pago server-side y desbloquea el informe.
-  // El checkout_session_id se mantiene en la URL mientras la verificación está en curso
-  // (valor informativo / permite reintentar a mano si algo falla) y solo se retira una vez
-  // se conoce el resultado — no antes.
+  // El webhook acredita el pago. Esta verificación autenticada funciona además como respaldo
+  // inmediato si Stripe tarda unos segundos en entregar el webhook.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const sessionId = params.get('checkout_session_id')
-    if (!sessionId) return
+    if (!sessionId || !auth.user) return
 
     const clearUrl = () => window.history.replaceState({}, '', window.location.pathname)
 
     ;(async () => {
       try {
-        const res = await fetch('/api/verify-checkout', {
+        const res = await authorizedFetch('/api/verify-checkout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId }),
         })
         const data = await res.json()
-        if (!data.paid) { setCheckoutError(t('checkout.notCompleted')); return }
+        if (!res.ok || !data.paid) { setCheckoutError(data.error || t('checkout.notCompleted')); return }
+        await refreshAccount()
+        setGateError(null)
 
         if (data.product === 'extra') {
-          const grantRes = await fetch('/api/analysis-gate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'grant-extra', sessionId }),
-          })
-          const grant = await grantRes.json()
-          // alreadyGranted (replay de una sesión ya canjeada) no es un error: el usuario ya
-          // tiene su crédito de una carga anterior de esta misma pantalla — no hace falta
-          // asustarle con un mensaje de soporte.
-          if (grant.granted || grant.alreadyGranted) {
-            setGateError(null)
-            try {
-              const raw = sessionStorage.getItem(PENDING_SITUATION_KEY)
-              if (raw) {
-                const parsed = JSON.parse(raw)
-                if (parsed.situation != null) setSituation(parsed.situation)
-                if (parsed.meetingType) setMeetingType(parsed.meetingType)
-                if (parsed.selectedIds) setSelectedIds(parsed.selectedIds)
-                // El redirect a Stripe es una navegación completa: I18nProvider vuelve a su
-                // valor por defecto ('es') al recargar. Sin restaurar esto aquí, un usuario
-                // que debatía en inglés vuelve de pagar y se encuentra la UI en español.
-                if (parsed.lang) setLang(parsed.lang)
-              }
-            } catch {}
-            sessionStorage.removeItem(PENDING_SITUATION_KEY)
-          } else {
-            setCheckoutError(t('checkout.confirmedNotActivated'))
-          }
+          try {
+            const raw = sessionStorage.getItem(PENDING_SITUATION_KEY)
+            if (raw) {
+              const parsed = JSON.parse(raw)
+              if (parsed.situation != null) setSituation(parsed.situation)
+              if (parsed.meetingType) setMeetingType(parsed.meetingType)
+              if (parsed.selectedIds) setSelectedIds(parsed.selectedIds)
+              if (parsed.lang) setLang(parsed.lang)
+            }
+          } catch {}
+          sessionStorage.removeItem(PENDING_SITUATION_KEY)
         } else {
-          // El crédito y el acceso premium se acreditan server-side (KV), verificados contra
-          // Stripe — no basta con que /api/verify-checkout diga "paid" para dárselos por
-          // buenos aquí: eso es justo lo que dejaba generar el informe gratis con solo tocar
-          // localStorage. grant-report es quien realmente los concede.
-          const grantRes = await fetch('/api/analysis-gate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'grant-report', sessionId }),
-          })
-          const grant = await grantRes.json()
-
-          if (grant.granted) {
-            localStorage.setItem(PREMIUM_ACCESS_KEY, 'true')
-            setPremiumAccess(true)
-            localStorage.setItem(CREDITS_KEY, String(grant.credits))
-            setReportCredits(grant.credits)
-            setGateError(null)
-          } else if (!grant.alreadyGranted) {
-            setCheckoutError(t('checkout.confirmedNotActivated'))
-            return
-          }
-          // alreadyGranted (replay de una sesión ya canjeada): el usuario ya tiene su
-          // crédito y acceso de una carga anterior de esta misma pantalla, no hace falta
-          // repetir el aviso ni bloquearle.
-
-          // Si esta compra viene del CTA de "informe completo" dentro de un debate ya
-          // terminado, retoma ese contexto y genera el informe de inmediato sobre el
-          // análisis para el que se compró, en vez de dejar al usuario en la pantalla
-          // inicial con el crédito sin usar. El gasto real del crédito lo hace el propio
-          // generateReport contra el servidor, no este efecto.
           try {
             const raw = sessionStorage.getItem(PENDING_REPORT_KEY)
             if (raw) {
               const parsed = JSON.parse(raw)
               if (parsed.situation != null) setSituation(parsed.situation)
-              addReportCredits(-1) // solo refleja en pantalla el crédito que generateReport va a consumir de inmediato en el servidor
               setShowReport(true)
-              // parsed.lang (guardado justo antes del redirect a Stripe) se pasa explícito a
-              // generateReport en vez de depender de la variable `lang` de este cierre: setLang
-              // de abajo no se refleja en `lang` hasta el próximo render, así que usar el
-              // cierre aquí generaría el informe en el idioma por defecto ('es'), no en el que
-              // el usuario tenía activo antes de pagar.
               if (parsed.lang) setLang(parsed.lang)
-              generateReport({ ...parsed, apiKey: null, provider: 'claude', tier: 'paid', lang: parsed.lang || 'es' })
+              await generateReport({ ...parsed, apiKey: null, provider: 'claude', tier: 'paid', lang: parsed.lang || 'es' })
+              await refreshAccount()
             }
           } catch {}
           sessionStorage.removeItem(PENDING_REPORT_KEY)
@@ -281,22 +250,23 @@ function AppInner() {
         clearUrl()
       }
     })()
-  }, [addReportCredits, generateReport, t, setLang])
+  }, [auth.user, generateReport, refreshAccount, t, setLang])
 
   const consensus = useMemo(() => computeConsensus(directorStates), [directorStates])
 
-  const handleGenerateReport = () => {
+  const handleGenerateReport = async () => {
     if (reportCredits <= 0) return
-    addReportCredits(-1)
     setShowReport(true)
-    generateReport({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey: apiKey || null, provider: apiProvider, lang })
+    await generateReport({ situation, meetingType, activeDirectors, directorStates, verdict, apiKey: apiKey || null, provider: apiProvider, lang })
+    await refreshAccount()
   }
 
   const handleBuyReport = async (product) => {
+    if (!auth.user) { setShowAuth(true); return }
     setCheckoutError(null)
     setBuyingReport(true)
     try {
-      const res = await fetch('/api/checkout', {
+      const res = await authorizedFetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product }),
@@ -346,9 +316,18 @@ function AppInner() {
     let ticket = ''
 
     if (!apiKey) {
+      if (!auth.user) {
+        try {
+          localStorage.setItem(PENDING_AUTH_KEY, JSON.stringify({
+            savedAt: Date.now(), situation, meetingType, selectedIds, profile, lang,
+          }))
+        } catch {}
+        setShowAuth(true)
+        return
+      }
       setGateChecking(true)
       try {
-        const res = await fetch('/api/analysis-gate', {
+        const res = await authorizedFetch('/api/analysis-gate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'check' }),
@@ -375,13 +354,21 @@ function AppInner() {
     const profileLine = buildProfileLine(profile)
     const effectiveSituation = profileLine ? `${profileLine}\n\n${baseSituation}` : baseSituation
     await conveneBoard({ directors, situation: effectiveSituation, meetingType, contextBlock: buildContextBlock(), apiKey: apiKey || null, provider: apiProvider, analysisTicket: ticket, mode: boardMode })
-  }, [situation, meetingType, selectedIds, apiKey, apiProvider, boardMode, isIdle, conveneBoard, buildContextBlock, buildSituationBrief, profile])
+  }, [situation, meetingType, selectedIds, apiKey, apiProvider, boardMode, isIdle, conveneBoard, buildContextBlock, buildSituationBrief, profile, auth.user, lang])
+
+  useEffect(() => {
+    if (!resumeAfterAuth || !auth.user || !isIdle) return
+    setResumeAfterAuth(false)
+    localStorage.removeItem(PENDING_AUTH_KEY)
+    handleConvene()
+  }, [resumeAfterAuth, auth.user, isIdle, handleConvene])
 
   const handleBuyExtra = async () => {
+    if (!auth.user) { setShowAuth(true); return }
     setCheckoutError(null)
     setBuyingExtra(true)
     try {
-      const res = await fetch('/api/checkout', {
+      const res = await authorizedFetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product: 'extra' }),
@@ -422,6 +409,19 @@ function AppInner() {
     window.history.replaceState({}, '', '/')
   }
 
+  const handleSignOut = async () => {
+    await auth.signOut()
+    setShowAccount(false)
+    setAnalysisTicket('')
+  }
+
+  const handleOpenSavedReport = (saved) => {
+    setSituation(saved.situation || '')
+    restoreReport(saved)
+    setShowAccount(false)
+    setShowReport(true)
+  }
+
   // Extrae la línea de convicción de un director del texto generado, para mostrarla en su
   // modal. Reutiliza el mismo matcher que consensus.js usa para clasificar el consenso.
   const getDirectorVote = (dirId) => findConvictionLine(directorStates[dirId]?.text)
@@ -460,8 +460,16 @@ function AppInner() {
             </button>
           )}
           <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '20px', border: '1px solid var(--bd)', color: 'var(--t3)', background: 'transparent' }}>
-            🌐 {t('nav.freeAnalyses')}
+            🌐 {auth.user ? `${auth.account?.profile?.free_remaining ?? '…'}/2` : t('nav.freeAnalyses')}
           </span>
+          <button
+            type="button"
+            className="nav-account"
+            onClick={() => auth.user ? setShowAccount(true) : setShowAuth(true)}
+            title={auth.user?.email || (lang === 'en' ? 'Sign in' : 'Acceder')}
+          >
+            {auth.user?.email || (lang === 'en' ? 'Sign in' : 'Acceder')}
+          </button>
           <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--bd)', borderRadius: 'var(--r-sm)', overflow: 'hidden' }}>
             <button
               onClick={() => setLang('en')}
@@ -828,6 +836,21 @@ function AppInner() {
         >
           {t('report.reopen')}
         </button>
+      )}
+
+      {showAuth && (
+        <AuthModal configured={auth.configured} onClose={() => setShowAuth(false)} onSend={auth.sendMagicLink} />
+      )}
+
+      {showAccount && auth.user && (
+        <AccountModal
+          user={auth.user}
+          account={auth.account}
+          loading={auth.accountLoading}
+          onClose={() => setShowAccount(false)}
+          onSignOut={handleSignOut}
+          onOpenReport={handleOpenSavedReport}
+        />
       )}
 
       {/* Modals */}

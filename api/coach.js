@@ -1,6 +1,7 @@
 export const config = { runtime: 'edge' }
 
 import { consumeAnalysisTicket } from '../server/analysisTicket.js'
+import { authErrorResponse, callRpc, requireUser, supabaseAdmin } from '../server/supabase.js'
 
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000
 // El límite cuenta llamadas individuales, no sesiones. Un análisis completo hace ~14 llamadas
@@ -17,14 +18,21 @@ function getIP(req) {
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
 }
 
-async function checkRate(ip) {
+async function checkRate(userId, ip) {
   const now = Date.now()
   const bucket = Math.floor(now / RATE_LIMIT_WINDOW_MS)
-  const key = `coach_rate:${ip}:${bucket}`
-  const count = await kvCommand(`/incr/${encodeURIComponent(key)}`)
-  if (count === 1) await kvCommand(`/expire/${encodeURIComponent(key)}/${2 * 60 * 60}`)
+  const userKey = `coach_rate:user:${userId}:${bucket}`
+  const ipKey = `coach_rate:ip:${ip}:${bucket}`
+  const [count, ipCount] = await Promise.all([
+    kvCommand(`/incr/${encodeURIComponent(userKey)}`),
+    kvCommand(`/incr/${encodeURIComponent(ipKey)}`),
+  ])
+  await Promise.all([
+    count === 1 ? kvCommand(`/expire/${encodeURIComponent(userKey)}/${2 * 60 * 60}`) : null,
+    ipCount === 1 ? kvCommand(`/expire/${encodeURIComponent(ipKey)}/${2 * 60 * 60}`) : null,
+  ])
   const resetAt = (bucket + 1) * RATE_LIMIT_WINDOW_MS
-  return { ok: count <= RATE_LIMIT_MAX, remaining: Math.max(0, RATE_LIMIT_MAX - count), resetAt }
+  return { ok: count <= RATE_LIMIT_MAX && ipCount <= RATE_LIMIT_MAX * 2, remaining: Math.max(0, RATE_LIMIT_MAX - count), resetAt }
 }
 
 // El modo 'premium' (informe de pago + sus quick-takes) no puede confiarse a que el propio
@@ -41,10 +49,11 @@ async function kvCommand(path) {
   return data.result
 }
 
-async function hasPremiumAccess(ip) {
+async function hasPremiumAccess(userId) {
   try {
-    const v = await kvCommand(`/get/${encodeURIComponent(`premium_access:${ip}`)}`)
-    return Boolean(v)
+    const { data, error } = await supabaseAdmin().from('profiles').select('premium_access').eq('user_id', userId).single()
+    if (error) throw error
+    return Boolean(data?.premium_access)
   } catch (err) {
     console.error('coach premium-check KV error:', err)
     // Si KV está caído no podemos verificar el pago: negar por defecto, no aceptar.
@@ -62,7 +71,7 @@ function cors(origin) {
   return {
     'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : '',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Analysis-Ticket',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Analysis-Ticket',
     'Access-Control-Expose-Headers': 'X-AI-Provider',
     'Vary': 'Origin',
   }
@@ -109,55 +118,75 @@ export default async function handler(req) {
   let body
   try { body = await req.json() } catch { return new Response(JSON.stringify({ error: 'JSON inválido' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } }) }
 
+  const auth = await requireUser(req)
+  if (!auth.user) return authErrorResponse(auth.error, c)
+
   const { systemPrompt, userPrompt, attachments = [] } = body
-  const mode = body.mode === 'premium' ? 'premium' : 'free'
+  const mode = body.mode === 'premium' ? 'premium' : body.mode === 'premium-quick' ? 'premium-quick' : 'free'
   // Tope por modo: el gratuito se queda en 1200 (barato, no debe poder pedirse un informe
   // completo sin pagar). El informe premium (buildReportSystem en useReport.js) pide 10
   // secciones estructuradas — 7500 es el margen que en pruebas reales cubre incluso los
   // informes más largos sin cortar la despedida final a media frase.
-  const maxTokens = Math.min(body.maxTokens || 800, mode === 'premium' ? 7500 : 1200)
+  const maxTokens = Math.min(body.maxTokens || 800, mode === 'premium' ? 7500 : mode === 'premium-quick' ? 320 : 1200)
   if (!systemPrompt || !userPrompt) return new Response(JSON.stringify({ error: 'Faltan prompts' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
   if (userPrompt.length > 12000 || systemPrompt.length > 8000) return new Response(JSON.stringify({ error: 'Prompt demasiado largo' }), { status: 400, headers: { ...c, 'Content-Type': 'application/json' } })
 
-  // Cada análisis gratuito recibe un ticket firmado, ligado a su IP y con un presupuesto
+  // Cada análisis gratuito recibe un ticket firmado, ligado a su cuenta y con un presupuesto
   // máximo de llamadas. Así /api/coach no puede usarse como proxy abierto saltándose el
   // control de 2 análisis/día. Los clientes premium pueden usar el chat sin ticket.
-  if (mode === 'premium') {
-    const authorization = await consumeAnalysisTicket(req.headers.get('x-analysis-ticket') || '', ip)
-    if (!authorization.allowed || authorization.tier !== 'premium-report') {
+  let reportAuthorization = null
+  if (mode === 'premium' || mode === 'premium-quick') {
+    const authorization = await consumeAnalysisTicket(req.headers.get('x-analysis-ticket') || '', auth.user.id)
+    const expectedTier = mode === 'premium' ? 'premium-report' : 'premium-quick'
+    if (!authorization.allowed || authorization.tier !== expectedTier) {
       const unavailable = authorization.code === 'ANALYSIS_AUTH_UNAVAILABLE'
       return new Response(JSON.stringify({ error: unavailable ? 'El control de uso no está disponible. Inténtalo de nuevo en unos minutos.' : 'Este informe no tiene una autorización válida.', code: authorization.code || 'ANALYSIS_TICKET_INVALID' }), {
         status: unavailable ? 503 : 401, headers: { ...c, 'Content-Type': 'application/json' }
       })
     }
+    reportAuthorization = authorization
   } else {
     const ticket = req.headers.get('x-analysis-ticket') || ''
     if (ticket) {
-      const authorization = await consumeAnalysisTicket(ticket, ip)
+      const authorization = await consumeAnalysisTicket(ticket, auth.user.id)
       if (!authorization.allowed) {
         const unavailable = authorization.code === 'ANALYSIS_AUTH_UNAVAILABLE'
         return new Response(JSON.stringify({ error: unavailable ? 'El control de uso no está disponible. Inténtalo de nuevo en unos minutos.' : 'Esta autorización de análisis no es válida o ya se agotó.', code: authorization.code }), {
           status: unavailable ? 503 : 429, headers: { ...c, 'Content-Type': 'application/json' }
         })
       }
-    } else if (!(await hasPremiumAccess(ip))) {
+    } else if (!(await hasPremiumAccess(auth.user.id))) {
       return new Response(JSON.stringify({ error: 'Primero debes iniciar un análisis desde la aplicación.', code: 'ANALYSIS_TICKET_REQUIRED' }), {
         status: 401, headers: { ...c, 'Content-Type': 'application/json' }
       })
     }
   }
 
+  const refundFinalReport = async () => {
+    if (mode !== 'premium' || !reportAuthorization?.reservationId) return
+    try {
+      await callRpc('refund_report_reservation', {
+        p_user_id: auth.user.id,
+        p_reservation_id: reportAuthorization.reservationId,
+      })
+    } catch (error) {
+      console.error('report refund error:', error)
+    }
+  }
+
   let rate
   try {
-    rate = await checkRate(ip)
+    rate = await checkRate(auth.user.id, ip)
   } catch (err) {
     console.error('coach rate-limit KV error:', err)
+    await refundFinalReport()
     return new Response(JSON.stringify({ error: 'El control de uso no está disponible. Inténtalo de nuevo en unos minutos.', code: 'ANALYSIS_AUTH_UNAVAILABLE' }), {
       status: 503, headers: { ...c, 'Content-Type': 'application/json' }
     })
   }
   const { ok, remaining, resetAt } = rate
   if (!ok) {
+    await refundFinalReport()
     const min = Math.ceil((resetAt - Date.now()) / 60000)
     return new Response(JSON.stringify({ error: `Límite de uso alcanzado por esta hora. Vuelve en ${min} min.`, code: 'RATE_LIMITED', resetAt }), {
       status: 429, headers: { ...c, 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil((resetAt - Date.now()) / 1000)) }
@@ -167,7 +196,8 @@ export default async function handler(req) {
   // El navegador nunca trae su propia API key hasta aquí (aiClient.js llama directo al
   // proveedor en ese caso) — mode:'premium' sin haber pagado era el hueco real. Se exige
   // la bandera que api/analysis-gate.js solo activa tras confirmar el pago con Stripe.
-  if (mode === 'premium' && !(await hasPremiumAccess(ip))) {
+  if ((mode === 'premium' || mode === 'premium-quick') && !(await hasPremiumAccess(auth.user.id))) {
+    await refundFinalReport()
     return new Response(JSON.stringify({ error: 'Esta función requiere haber comprado el informe o el plan de acción.', code: 'PAYMENT_REQUIRED' }), {
       status: 402, headers: { ...c, 'Content-Type': 'application/json' }
     })
@@ -179,7 +209,10 @@ export default async function handler(req) {
   let provider = useOpenAI ? 'openai' : 'claude'
   const apiKey = useOpenAI ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY
   const claudeModel = mode === 'free' ? 'claude-haiku-4-5' : 'claude-sonnet-4-6'
-  if (!apiKey) return new Response(JSON.stringify({ error: 'Servicio no configurado' }), { status: 503, headers: { ...c, 'Content-Type': 'application/json' } })
+  if (!apiKey) {
+    await refundFinalReport()
+    return new Response(JSON.stringify({ error: 'Servicio no configurado' }), { status: 503, headers: { ...c, 'Content-Type': 'application/json' } })
+  }
 
   let upstreamRes
   try {
@@ -187,6 +220,7 @@ export default async function handler(req) {
       ? await createOpenAIStream({ apiKey, systemPrompt, userPrompt, maxTokens, attachments })
       : await createClaudeStream({ apiKey, model: claudeModel, systemPrompt, userPrompt, maxTokens, attachments })
   } catch {
+    await refundFinalReport()
     return new Response(JSON.stringify({ error: `Error conectando con ${useOpenAI ? 'OpenAI' : 'Anthropic'}` }), { status: 502, headers: { ...c, 'Content-Type': 'application/json' } })
   }
 
@@ -203,6 +237,7 @@ export default async function handler(req) {
         maxTokens, attachments,
       })
     } catch {
+      await refundFinalReport()
       return new Response(JSON.stringify({ error: 'Error conectando con OpenAI y Anthropic' }), { status: 502, headers: { ...c, 'Content-Type': 'application/json' } })
     }
   }
@@ -211,7 +246,27 @@ export default async function handler(req) {
     const t = await upstreamRes.text().catch(() => '')
     let msg = `Error ${useOpenAI ? 'OpenAI' : 'Anthropic'} ${upstreamRes.status}`
     try { msg = JSON.parse(t).error?.message || msg } catch {}
+    await refundFinalReport()
     return new Response(JSON.stringify({ error: msg }), { status: upstreamRes.status, headers: { ...c, 'Content-Type': 'application/json' } })
+  }
+
+  if (mode === 'premium') {
+    try {
+      const finalized = await callRpc('finalize_report_reservation', {
+        p_user_id: auth.user.id,
+        p_reservation_id: reportAuthorization.reservationId,
+      })
+      if (!finalized) {
+        return new Response(JSON.stringify({ error: 'La reserva de este informe ya no está activa.', code: 'REPORT_RESERVATION_INVALID' }), {
+          status: 409, headers: { ...c, 'Content-Type': 'application/json' }
+        })
+      }
+    } catch (error) {
+      console.error('report finalize error:', error)
+      return new Response(JSON.stringify({ error: 'No se pudo confirmar el informe. El crédito reservado se recuperará automáticamente.', code: 'REPORT_FINALIZE_FAILED' }), {
+        status: 503, headers: { ...c, 'Content-Type': 'application/json' }
+      })
+    }
   }
 
   return new Response(upstreamRes.body, {

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useI18n } from '../lib/i18n.js'
 import { extractPdfText } from '../lib/pdfExtract.js'
+import { authorizedFetch } from '../lib/supabaseClient.js'
 
 // Extrae texto de Word (.docx) usando mammoth desde CDN
 async function extractDOCX(file) {
@@ -54,7 +55,7 @@ export function useContextBuilder() {
   // Envía al servidor para resumir
   const summarizeViaServer = async (type, payload, apiKey, provider) => {
     const body = { type, clientApiKey: apiKey || undefined, provider: provider || 'claude', lang, ...payload }
-    const res = await fetch('/api/context', {
+    const res = await authorizedFetch('/api/context', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

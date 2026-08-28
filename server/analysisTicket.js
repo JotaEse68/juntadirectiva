@@ -48,8 +48,8 @@ async function hmac(value) {
   return toBase64Url(new Uint8Array(signature))
 }
 
-async function ipFingerprint(ip) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ip))
+async function identityFingerprint(userId) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(userId))
   return toBase64Url(new Uint8Array(digest)).slice(0, 24)
 }
 
@@ -62,20 +62,21 @@ function safeEqual(a, b) {
   return difference === 0
 }
 
-export async function issueAnalysisTicket(ip, tier = 'free', maxCalls = ANALYSIS_TICKET_MAX_CALLS) {
+export async function issueAnalysisTicket(userId, tier = 'free', maxCalls = ANALYSIS_TICKET_MAX_CALLS, claims = {}) {
   const payload = {
     v: 1,
-    ip: await ipFingerprint(ip),
+    uid: await identityFingerprint(userId),
     tier,
     max: Math.max(1, Math.min(Number(maxCalls) || ANALYSIS_TICKET_MAX_CALLS, ANALYSIS_TICKET_MAX_CALLS)),
     nonce: crypto.randomUUID(),
     exp: Date.now() + TICKET_TTL_SECONDS * 1000,
+    ...(claims.reservationId ? { reservationId: claims.reservationId } : {}),
   }
   const encoded = toBase64Url(new TextEncoder().encode(JSON.stringify(payload)))
   return `${encoded}.${await hmac(encoded)}`
 }
 
-export async function consumeAnalysisTicket(ticket, ip) {
+export async function consumeAnalysisTicket(ticket, userId) {
   if (!ticket || typeof ticket !== 'string' || ticket.length > 1200) {
     return { allowed: false, code: 'ANALYSIS_TICKET_REQUIRED' }
   }
@@ -90,7 +91,7 @@ export async function consumeAnalysisTicket(ticket, ip) {
     if (payload.v !== 1 || !payload.nonce || !payload.exp || !payload.max || payload.exp < Date.now()) {
       return { allowed: false, code: 'ANALYSIS_TICKET_EXPIRED' }
     }
-    if (payload.ip !== await ipFingerprint(ip)) {
+    if (payload.uid !== await identityFingerprint(userId)) {
       return { allowed: false, code: 'ANALYSIS_TICKET_INVALID' }
     }
 
@@ -100,7 +101,7 @@ export async function consumeAnalysisTicket(ticket, ip) {
     if (used > payload.max) {
       return { allowed: false, code: 'ANALYSIS_TICKET_EXHAUSTED' }
     }
-    return { allowed: true, remaining: payload.max - used, tier: payload.tier }
+    return { allowed: true, remaining: payload.max - used, tier: payload.tier, reservationId: payload.reservationId || null }
   } catch (error) {
     console.error('analysis ticket error:', error)
     return { allowed: false, code: 'ANALYSIS_AUTH_UNAVAILABLE', unavailable: true }

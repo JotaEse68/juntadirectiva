@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { DIRECTORS } from '../lib/directors.js'
 import { streamCompletion } from '../lib/aiClient.js'
+import { authorizedFetch } from '../lib/supabaseClient.js'
 import { useI18n } from '../lib/i18n.js'
 
 // El system prompt de cada director está cargado de instrucciones y convenciones en español
@@ -18,7 +19,7 @@ async function quickTake({ director, situation, apiKey, provider, reportTicket, 
   const userMsg = `SITUACIÓN: ${situation}
 
 Como ${director.name} (${director.title}), da tu opinión exprés en 2-3 frases desde tu especialidad. No es un análisis largo — solo tu primera reacción experta y directa, sin rodeos.${languageLine}`
-  return streamCompletion({ provider, apiKey, system: languageSystemDirective(lang) + director.systemPrompt, userMsg, maxTokens: 260, serverMode: 'premium', analysisTicket: reportTicket })
+  return streamCompletion({ provider, apiKey, system: languageSystemDirective(lang) + director.systemPrompt, userMsg, maxTokens: 260, serverMode: 'premium-quick', analysisTicket: reportTicket })
 }
 
 // Encabezados exactos que también reconocen ReportModal.jsx (iconos, checklist, secciones)
@@ -92,22 +93,26 @@ export function useReport() {
     setReport(null)
     try {
       let reportTicket = ''
+      let quickTicket = ''
+      let reservationId = ''
       // Sin API key propia, el informe lo paga el servidor: hay que gastar un crédito real
       // verificado en KV antes de llamar a ningún modelo. Con API key propia el usuario paga
       // su propia cuenta, así que no consume créditos comprados en esta app.
       if (!apiKey) {
-        const gateRes = await fetch('/api/analysis-gate', {
+        const gateRes = await authorizedFetch('/api/analysis-gate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'consume-report' }),
+          body: JSON.stringify({ action: 'reserve-report' }),
         })
         if (!gateRes.ok) {
           const data = await gateRes.json().catch(() => ({}))
           throw new Error(data.code === 'NO_REPORT_CREDITS' ? t('gate.noReportCredits') : (data.error || t('gate.noReportCredits')))
         }
         const gateData = await gateRes.json()
-        if (!gateData.ticket) throw new Error(t('gate.unavailable'))
-        reportTicket = gateData.ticket
+        if (!gateData.reportTicket || !gateData.quickTicket || !gateData.reservationId) throw new Error(t('gate.unavailable'))
+        reportTicket = gateData.reportTicket
+        quickTicket = gateData.quickTicket
+        reservationId = gateData.reservationId
       }
 
       const activeIds = new Set(activeDirectors.map(d => d.id))
@@ -115,7 +120,7 @@ export function useReport() {
 
       const quickResults = await Promise.all(missingDirectors.map(async (director) => {
         try {
-          const text = await quickTake({ director, situation, apiKey, provider, reportTicket, lang })
+          const text = await quickTake({ director, situation, apiKey, provider, reportTicket: quickTicket, lang })
           return { director, text }
         } catch {
           return { director, text: null }
@@ -150,14 +155,27 @@ Produce el informe siguiendo exactamente la estructura indicada.`
       // da margen de sobra incluso en los casos más largos.
       const text = await streamCompletion({ provider, apiKey, system: buildReportSystem(lang), userMsg: reportPrompt, maxTokens: 7500, serverMode: 'premium', analysisTicket: reportTicket })
       setReport({ text, quickTakes })
+      if (!apiKey && reservationId) {
+        await authorizedFetch('/api/account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'save-report', reservationId, situation, verdict, reportText: text, quickTakes, language: lang }),
+        }).catch(() => null)
+      }
+      return { text, quickTakes, reservationId }
     } catch (err) {
       setError(err.message || t('report.generationFailed'))
+      return null
     } finally {
       setLoading(false)
     }
   }, [t])
 
   const reset = useCallback(() => { setReport(null); setError(null) }, [])
+  const restore = useCallback((saved) => {
+    setReport({ text: saved.report_text, quickTakes: saved.quick_takes || [] })
+    setError(null)
+  }, [])
 
-  return { report, loading, error, generateReport, reset }
+  return { report, loading, error, generateReport, reset, restore }
 }
