@@ -16,6 +16,7 @@ import { useContextBuilder } from './hooks/useContext.js'
 import { useReport } from './hooks/useReport.js'
 import { useChairmanChat } from './hooks/useChairmanChat.js'
 import { useAccount } from './hooks/useAccount.js'
+import { useCheckout } from './hooks/useCheckout.js'
 import ContextPanel from './components/ContextPanel.jsx'
 import { DIRECTORS, MEETING_TYPES, selectDirectorsForMeeting, orderForDebate } from './lib/directors.js'
 import { computeConsensus, findConvictionLine } from './lib/consensus.js'
@@ -140,17 +141,22 @@ function AppInner() {
   const [showReport, setShowReport] = useState(false)
   const { messages: chatMessages, sending: chatSending, error: chatError, freeMessagesUsed, sendMessage: sendChatMessage, reset: resetChat } = useChairmanChat()
 
-  const [buyingReport, setBuyingReport] = useState(false)
-  const [checkoutError, setCheckoutError] = useState(null)
   const [gateError, setGateError] = useState(null)
   const [gateChecking, setGateChecking] = useState(false)
-  const [buyingExtra, setBuyingExtra] = useState(false)
   const [boardMode, setBoardMode] = useState('fast')
   const [online, setOnline] = useState(() => navigator.onLine)
 
   const reportCredits = auth.account?.profile?.report_credits || 0
   const premiumAccess = Boolean(auth.account?.profile?.premium_access)
   const refreshAccount = auth.refreshAccount
+  const checkout = useCheckout({
+    user: auth.user,
+    t,
+    onAuthRequired: () => setShowAuth(true),
+    reportContext: { situation, meetingType, activeDirectors, directorStates, verdict, lang },
+    situationContext: { situation, meetingType, selectedIds, lang },
+  })
+  const { checkoutError, setCheckoutError, buyingReport, buyingExtra, buyReport, buyExtra } = checkout
 
   useEffect(() => {
     if (!auth.user) return
@@ -262,33 +268,6 @@ function AppInner() {
     await refreshAccount()
   }
 
-  const handleBuyReport = async (product) => {
-    if (!auth.user) { setShowAuth(true); return }
-    setCheckoutError(null)
-    setBuyingReport(true)
-    try {
-      const res = await authorizedFetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ product }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || t('checkout.createFailed'))
-      // El redirect a Stripe es una navegación completa: se pierde todo el estado de React.
-      // Si ya hay un debate terminado, se guarda para poder retomarlo y gastar el crédito
-      // recién comprado sobre él en cuanto se vuelva (ver el efecto de checkout_session_id).
-      if (isDone && verdict) {
-        try {
-          sessionStorage.setItem(PENDING_REPORT_KEY, JSON.stringify({ situation, meetingType, activeDirectors, directorStates, verdict, lang }))
-        } catch {}
-      }
-      window.location.href = data.url
-    } catch (err) {
-      setCheckoutError(err.message)
-      setBuyingReport(false)
-    }
-  }
-
   const handleSendChat = (text, attachments = []) => {
     sendChatMessage(text, attachments, { situation, activeDirectors, directorStates, verdict }, { apiKey: apiKey || null, provider: apiProvider, analysisTicket })
   }
@@ -363,31 +342,6 @@ function AppInner() {
     localStorage.removeItem(PENDING_AUTH_KEY)
     handleConvene()
   }, [resumeAfterAuth, auth.user, isIdle, handleConvene])
-
-  const handleBuyExtra = async () => {
-    if (!auth.user) { setShowAuth(true); return }
-    setCheckoutError(null)
-    setBuyingExtra(true)
-    try {
-      const res = await authorizedFetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ product: 'extra' }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || t('checkout.createFailed'))
-      // Igual que en handleBuyReport: se pierde el estado de React en el redirect. Aquí no
-      // hay debate que retomar, pero al menos se evita que el usuario tenga que reescribir
-      // lo que ya había tecleado.
-      try {
-        sessionStorage.setItem(PENDING_SITUATION_KEY, JSON.stringify({ situation, meetingType, selectedIds, lang }))
-      } catch {}
-      window.location.href = data.url
-    } catch (err) {
-      setCheckoutError(err.message)
-      setBuyingExtra(false)
-    }
-  }
 
   const handleReset = () => {
     reset(); resetReport(); resetChat(); setShowReport(false); setSituation('')
@@ -706,7 +660,7 @@ function AppInner() {
               </button>
 
               {gateError && (
-                <DailyLimitBanner error={gateError} onBuyExtra={handleBuyExtra} buying={buyingExtra} />
+                <DailyLimitBanner error={gateError} onBuyExtra={buyExtra} buying={buyingExtra} />
               )}
 
               <p className="free-mode-note" style={{ fontSize: '12px', color: 'var(--t3)', textAlign: 'center' }}>{t('form.freeMode')}</p>
@@ -776,7 +730,7 @@ function AppInner() {
                   loading={reportLoading}
                   credits={reportCredits}
                   onGenerate={handleGenerateReport}
-                  onBuy={handleBuyReport}
+                  onBuy={buyReport}
                   buying={buyingReport}
                 />
                 {checkoutError && (

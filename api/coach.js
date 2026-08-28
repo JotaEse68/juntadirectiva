@@ -37,8 +37,8 @@ async function checkRate(userId, ip) {
 
 // El modo 'premium' (informe de pago + sus quick-takes) no puede confiarse a que el propio
 // cliente diga "soy premium": eso es exactamente lo que permitía generar el informe gratis
-// editando localStorage. Antes de gastar tokens de pago, se comprueba en KV la misma bandera
-// que api/analysis-gate.js activa al confirmar un pago real con Stripe (grantReport).
+// Los límites horarios viven en KV para que reiniciar o repartir funciones serverless no
+// permita eludirlos. El acceso premium y los créditos se validan en Supabase.
 async function kvCommand(path) {
   const base = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
   const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN
@@ -195,7 +195,7 @@ export default async function handler(req) {
 
   // El navegador nunca trae su propia API key hasta aquí (aiClient.js llama directo al
   // proveedor en ese caso) — mode:'premium' sin haber pagado era el hueco real. Se exige
-  // la bandera que api/analysis-gate.js solo activa tras confirmar el pago con Stripe.
+  // Los créditos de pago se reservan y finalizan en Supabase; KV solo limita abuso horario.
   if ((mode === 'premium' || mode === 'premium-quick') && !(await hasPremiumAccess(auth.user.id))) {
     await refundFinalReport()
     return new Response(JSON.stringify({ error: 'Esta función requiere haber comprado el informe o el plan de acción.', code: 'PAYMENT_REQUIRED' }), {
