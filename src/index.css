@@ -114,6 +114,10 @@ textarea, input { font-family: 'Inter', sans-serif; }
 .account-empty { color:var(--t3); font-size:.8125rem; line-height:1.55; }
 .account-report { display:block; width:100%; padding:12px 0; border-bottom:1px solid var(--bd); color:var(--t1); text-align:left; }
 .account-report span,.account-report small { display:block; }.account-report span { font-size:.8125rem; line-height:1.45; }.account-report small { margin-top:4px; color:var(--t3); font-size:.6875rem; }
+.account-report-row { display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--bd); }
+.account-report-row .account-report { flex:1; border-bottom:0; }
+.account-report-download { flex:none; border:1px solid var(--bd); border-radius:7px; padding:6px 8px; background:transparent; color:var(--t2); font-size:.68rem; cursor:pointer; }
+.account-report-download:hover { border-color:var(--blue); color:var(--blue); }
 .account-signout { width:100%; min-height:48px; margin-top:24px; border:1px solid var(--bd); border-radius:var(--r-sm); color:var(--t2); }
 .nav-account { max-width:190px; padding:6px 10px; border:1px solid var(--blue-bd); border-radius:20px; background:var(--blue-dim); color:var(--blue); font-size:.6875rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 

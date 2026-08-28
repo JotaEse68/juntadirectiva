@@ -1,7 +1,7 @@
 import React from 'react'
 import { useI18n } from '../lib/i18n.js'
 
-export default function AccountModal({ user, account, loading, onClose, onSignOut, onOpenReport }) {
+export default function AccountModal({ user, account, loading, onClose, onSignOut, onOpenReport, onDownloadReport }) {
   const { lang } = useI18n()
   const es = lang !== 'en'
   const reports = account?.reports || []
@@ -25,10 +25,13 @@ export default function AccountModal({ user, account, loading, onClose, onSignOu
           {reports.length === 0 ? (
             <p className="account-empty">{es ? 'Todavía no hay informes. Aquí aparecerán cuando generes el primero.' : 'No reports yet. They will appear here after you generate one.'}</p>
           ) : reports.map(saved => (
-            <button type="button" className="account-report" key={saved.id} onClick={() => onOpenReport(saved)}>
-              <span>{saved.situation.slice(0, 95)}{saved.situation.length > 95 ? '…' : ''}</span>
-              <small>{new Intl.DateTimeFormat(lang, { dateStyle: 'medium' }).format(new Date(saved.created_at))}</small>
-            </button>
+            <div className="account-report-row" key={saved.id}>
+              <button type="button" className="account-report" onClick={() => onOpenReport(saved)}>
+                <span>{saved.situation.slice(0, 95)}{saved.situation.length > 95 ? '…' : ''}</span>
+                <small>{new Intl.DateTimeFormat(lang, { dateStyle: 'medium' }).format(new Date(saved.created_at))}</small>
+              </button>
+              <button type="button" className="account-report-download" onClick={() => onDownloadReport?.(saved)} aria-label={es ? 'Descargar informe' : 'Download report'}>↓ PDF</button>
+            </div>
           ))}
         </div>
 
@@ -37,4 +40,3 @@ export default function AccountModal({ user, account, loading, onClose, onSignOu
     </div>
   )
 }
-

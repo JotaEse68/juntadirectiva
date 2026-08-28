@@ -21,6 +21,7 @@ import { DIRECTORS, MEETING_TYPES, selectDirectorsForMeeting, orderForDebate } f
 import { computeConsensus, findConvictionLine } from './lib/consensus.js'
 import { I18nProvider, useI18n } from './lib/i18n.js'
 import { authorizedFetch } from './lib/supabaseClient.js'
+import { downloadExecutiveReportPdf } from './lib/reportPdf.js'
 
 const STORAGE_KEY = 'junta_api_key'
 const STORAGE_PROVIDER_KEY = 'junta_api_provider'
@@ -421,6 +422,12 @@ function AppInner() {
     setShowAccount(false)
     setShowReport(true)
   }
+  const handleDownloadSavedReport = (saved) => downloadExecutiveReportPdf({
+    situation: saved.situation,
+    verdict: saved.verdict,
+    report: { text: saved.report_text, quickTakes: saved.quick_takes || [] },
+    lang,
+  })
 
   // Extrae la línea de convicción de un director del texto generado, para mostrarla en su
   // modal. Reutiliza el mismo matcher que consensus.js usa para clasificar el consenso.
@@ -850,6 +857,7 @@ function AppInner() {
           onClose={() => setShowAccount(false)}
           onSignOut={handleSignOut}
           onOpenReport={handleOpenSavedReport}
+          onDownloadReport={handleDownloadSavedReport}
         />
       )}
 
