@@ -125,3 +125,21 @@ textarea, input { font-family: 'Inter', sans-serif; }
   .auth-card { padding:26px 20px; }
   .nav-account { max-width:42px; font-size:0; }.nav-account::before { content:'👤'; font-size:.875rem; }
 }
+
+@media (max-width:640px) {
+  .auth-overlay { align-items:end; padding:10px; }
+  .auth-card { width:100%; max-height:min(90vh, 720px); border-radius:18px 18px 12px 12px; }
+  .account-balances { gap:8px; }
+  .account-balances div { padding:13px 11px; }
+  .account-report-row { align-items:flex-start; }
+  .account-report-download { min-block-size:36px; margin-top:8px; }
+}
+
+@media (pointer: coarse) {
+  button, a { min-block-size:44px; }
+  .auth-close { min-block-size:44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; transition-duration:.001ms !important; }
+}
